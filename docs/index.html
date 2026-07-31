@@ -1,0 +1,4072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>After the Buzzer — Horror Point &amp; Click</title>
+<style>
+  :root{
+    --amber:#ffc266;
+    --dim:#a89272;
+    --red:#d64535;
+    --paper:#c9c3b2;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;
+    font-family:"Courier New",Courier,monospace;color:var(--amber);
+    -webkit-font-smoothing:none;user-select:none;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;}
+
+  /* ---------- generic overlay ----------
+     Explicit stacking: the vignette must sit under the readable text, or it
+     eats the corner HUD, which is exactly where it is darkest. */
+  .layer{position:fixed;inset:0;pointer-events:none;z-index:3;}
+  .layer.on{pointer-events:auto;}
+  .layer.panel{z-index:10;}
+  .hidden{display:none !important;}
+
+  /* ---------- HUD ---------- */
+  #hud{font-size:14px;letter-spacing:1px;
+    text-shadow:0 0 7px rgba(255,194,102,.45), 0 1px 3px rgba(0,0,0,.9);}
+  #hud .corner{position:absolute;padding:14px 18px;}
+  #topleft{top:0;left:0;}
+  #topright{top:0;right:0;text-align:right;}
+  #botleft{bottom:0;left:0;}
+  #botright{bottom:0;right:0;text-align:right;}
+  .rec{color:#ff5f52;}
+  .rec b{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff5f52;
+    margin-right:6px;animation:blink 1.6s steps(2,end) infinite;vertical-align:middle;}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.12}}
+  #objective{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    text-align:center;font-size:13px;color:#ece2cc;opacity:1;max-width:70vw;}
+  #objective .lvl{display:block;font-size:11px;color:var(--dim);letter-spacing:3px;margin-bottom:3px;}
+
+  .ballcount{display:flex;align-items:center;gap:9px;font-size:19px;}
+  .ballicon{width:18px;height:18px;border-radius:50%;background:#b4541c;
+    border:1px solid #2a1207;position:relative;box-shadow:inset -3px -3px 0 rgba(0,0,0,.35);}
+  .ballicon:before,.ballicon:after{content:"";position:absolute;background:#2a1207;}
+  .ballicon:before{left:50%;top:0;width:1px;height:100%;transform:translateX(-50%);}
+  .ballicon:after{top:50%;left:0;height:1px;width:100%;transform:translateY(-50%);}
+
+  .bat{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);}
+  .batshell{width:78px;height:11px;border:1px solid #93805c;position:relative;padding:1px;}
+  .batshell:after{content:"";position:absolute;right:-4px;top:3px;width:3px;height:5px;background:#93805c;}
+  .batfill{height:100%;background:var(--amber);width:100%;transition:width .25s linear;}
+  .batfill.low{background:#ff5f52;animation:blink 1s steps(2,end) infinite;}
+
+  /* ---------- cursor / reticle ---------- */
+  #reticle{position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;
+    transition:opacity .15s;opacity:.75;z-index:4;}
+  #reticle .r{position:absolute;inset:0;border:1px solid rgba(255,194,102,.95);border-radius:50%;
+    transform:scale(.32);transition:transform .12s ease-out;}
+  #reticle.hot .r{transform:scale(1);border-color:#fff3d8;}
+  #reticle .dot{position:absolute;left:50%;top:50%;width:2px;height:2px;background:#fff3d8;
+    transform:translate(-50%,-50%);}
+  #hovername{position:fixed;transform:translate(-50%,18px);font-size:12px;letter-spacing:2px;
+    color:#fff3d8;text-shadow:0 0 8px #000;pointer-events:none;white-space:nowrap;z-index:4;}
+
+  /* ---------- caption ---------- */
+  #caption{position:fixed;bottom:12%;left:50%;transform:translateX(-50%);width:76vw;text-align:center;
+    font-size:15px;color:#f4ecdc;text-shadow:0 2px 8px #000;opacity:0;transition:opacity .5s;
+    letter-spacing:1px;pointer-events:none;font-style:italic;z-index:4;}
+  #caption.on{opacity:1;}
+
+  /* ---------- panels ---------- */
+  .panel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(2,2,3,.82);backdrop-filter:blur(1px);}
+  .box{border:1px solid #4a3f2b;background:linear-gradient(180deg,rgba(16,14,11,.97),rgba(8,7,6,.97));
+    padding:26px 30px;max-width:640px;width:min(90vw,640px);box-shadow:0 0 60px rgba(0,0,0,.9);}
+  .box h2{margin:0 0 4px;font-size:19px;letter-spacing:5px;color:#ffe7c2;font-weight:normal;}
+  .box .sub{color:var(--dim);font-size:11px;letter-spacing:3px;margin-bottom:18px;}
+  .box p{font-size:14px;line-height:1.65;color:#e6ddca;margin:0 0 14px;white-space:pre-wrap;}
+  button.mi{display:block;width:100%;text-align:left;background:none;border:1px solid #594d33;
+    color:#f6e0b6;font:inherit;font-size:14px;letter-spacing:2px;padding:10px 14px;margin:7px 0;
+    cursor:pointer;transition:.12s;}
+  button.mi:hover{background:#2e2517;border-color:var(--amber);color:#fffaf0;transform:translateX(4px);}
+  button.mi:disabled{opacity:.4;cursor:default;transform:none;}
+  .row{display:flex;gap:10px;}
+  .row button.mi{margin-top:14px;}
+
+  /* ---------- note ---------- */
+  #noteText{white-space:pre-wrap;font-size:14.5px;line-height:1.7;color:#1a1712;}
+  #notePaper{background:var(--paper);padding:26px 28px;border:1px solid #7a725e;
+    box-shadow:0 0 80px rgba(0,0,0,.95);max-width:560px;width:min(88vw,560px);
+    background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.03) 0 1px,transparent 1px 3px);}
+  #noteTitle{font-size:12px;letter-spacing:4px;color:#5c5343;margin-bottom:14px;}
+  #noteImg{display:block;width:100%;max-width:420px;margin:0 auto 16px;
+    image-rendering:pixelated;border:1px solid #7a725e;
+    box-shadow:0 3px 14px rgba(0,0,0,.4);}
+  #noteClose{margin-top:20px;border-color:#6d6350;color:#2a2519;}
+  #noteClose:hover{background:#b7b0a0;color:#000;border-color:#000;}
+
+  /* ---------- the James dossier ---------- */
+  #dossier .box{max-width:720px;width:min(92vw,720px);}
+  #dosHead{font-size:11px;letter-spacing:3px;color:#a89272;line-height:1.8;
+    border-bottom:1px solid #3a3222;padding-bottom:12px;margin-bottom:4px;}
+  #dosList{max-height:min(52vh,440px);overflow-y:auto;padding-right:8px;margin:14px 0;}
+  #dosList::-webkit-scrollbar{width:8px;}
+  #dosList::-webkit-scrollbar-thumb{background:#4a3f2b;}
+  .dosEntry{border-left:2px solid #4a3f2b;padding:2px 0 2px 12px;margin:0 0 16px;}
+  .dosEntry .who{font-size:10px;letter-spacing:3px;color:#c9a961;margin-bottom:5px;}
+  .dosEntry .said{font-size:13px;line-height:1.6;color:#ddd3bf;white-space:pre-wrap;}
+  .dosEntry.warm{border-left-color:#4d6b46;}
+  .dosEntry.cold{border-left-color:#6b3f3a;}
+  .dosEntry.contra{border-left-color:#6b5f2f;}
+  .dosEntry.game{border-left-color:#3f5570;}
+  .dosEntry.james{border-left-color:#a8894a;background:rgba(255,194,102,.05);}
+  .dosEntry.james .who{color:#ffd79a;}
+  #dosFoot{font-size:12px;color:#b6907f;line-height:1.8;border-top:1px solid #3a3222;
+    padding-top:12px;font-style:italic;}
+
+  /* ---------- inventory ---------- */
+  #invGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0 16px;}
+  .slot{border:1px solid #4d4430;aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    text-align:center;font-size:10px;letter-spacing:1px;color:#c6b58f;padding:6px;cursor:pointer;
+    background:rgba(255,255,255,.03);}
+  .slot.has{border-color:#8a7549;color:#f4e0b4;background:rgba(255,194,102,.08);}
+  .slot.sel{border-color:var(--amber);background:rgba(255,194,102,.18);color:#fffaf0;}
+  #invDesc{min-height:64px;font-size:13px;color:#d5cbb4;line-height:1.6;border-top:1px solid #423a26;padding-top:12px;}
+
+  /* ---------- title ---------- */
+  #title .box{text-align:center;border:none;background:none;box-shadow:none;}
+  #titleName{font-size:min(9vw,52px);letter-spacing:min(2.2vw,12px);color:#fdf3dc;margin:0;
+    text-shadow:0 0 34px rgba(255,194,102,.35),3px 0 0 rgba(217,67,58,.5),-3px 0 0 rgba(58,130,217,.35);
+    animation:tflick 6s infinite;}
+  @keyframes tflick{0%,92%,100%{opacity:1}93%{opacity:.35}94%{opacity:.9}96%{opacity:.5}}
+  .tsub{font-size:13px;letter-spacing:7px;color:#b39c73;margin:10px 0 34px;}
+  #title .menu{max-width:330px;margin:0 auto;}
+  .foot{margin-top:26px;font-size:11px;color:#8b7c62;letter-spacing:2px;line-height:1.9;}
+
+  /* ---------- pause / VHS ---------- */
+  #pause .box{background:rgba(6,6,8,.92);}
+  #pauseHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;}
+  #pauseHead .p{font-size:22px;letter-spacing:6px;color:#fff;}
+  .track{height:2px;background:repeating-linear-gradient(90deg,#fff 0 8px,transparent 8px 22px);
+    opacity:.35;margin:10px 0 18px;animation:trk 3s linear infinite;}
+  @keyframes trk{0%{background-position:0 0}100%{background-position:120px 0}}
+  #stats{font-size:12px;color:#c0b08d;line-height:1.9;letter-spacing:1px;}
+
+  /* ---------- game over ---------- */
+  #redflash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:19;
+    transition:opacity .18s linear;
+    background:radial-gradient(ellipse at center,rgba(255,64,48,.62) 0%,rgba(138,0,0,.95) 100%);}
+  #gameover{opacity:0;transition:opacity 1.5s ease-in;
+    background:radial-gradient(ellipse at center,rgba(58,6,5,.88) 0%,rgba(2,1,1,.97) 68%);}
+  #gameover.vis{opacity:1;}
+  #gameover .box{text-align:center;border:1px solid #6e1b16;
+    background:linear-gradient(180deg,rgba(20,8,7,.97),rgba(6,3,3,.98));
+    box-shadow:0 0 90px rgba(190,26,20,.25),inset 0 0 70px rgba(130,12,10,.13);}
+
+  /* scoreboard strip — LED-ish digits behind a scanline screen */
+  .sboard{display:flex;gap:8px;margin-bottom:24px;padding:10px;
+    background:#080404;border:1px solid #43120f;
+    background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.55) 0 1px,transparent 1px 3px);}
+  .sbcell{flex:1;padding:6px 4px;}
+  .sbcell+.sbcell{border-left:1px solid #2e0d0b;}
+  .sblab{display:block;font-size:9px;letter-spacing:4px;color:#b4796a;margin-bottom:5px;}
+  .sbnum{display:block;font-size:31px;line-height:1;letter-spacing:2px;color:#ff3b2e;
+    text-shadow:0 0 16px rgba(255,59,46,.8),0 0 3px rgba(255,190,170,.9);}
+  .sbnum.sm{font-size:23px;padding-top:7px;}
+
+  #goTitle{margin:0;font-weight:bold;color:#fff;
+    font-size:min(15vw,84px);line-height:.94;letter-spacing:min(1.6vw,10px);
+    text-shadow:0 0 26px rgba(255,45,32,.85),0 0 72px rgba(255,20,10,.5),
+                3px 0 0 rgba(214,32,20,.75),-3px 0 0 rgba(40,90,190,.3);
+    animation:gopulse 2.6s ease-in-out infinite;}
+  @keyframes gopulse{0%,100%{opacity:1}50%{opacity:.87}}
+  #goSub{margin:16px 0 2px;font-size:min(4vw,19px);color:#ffdad0;
+    letter-spacing:2px;font-style:italic;}
+  #goStats{font-size:12px;color:#b6907f;letter-spacing:2px;line-height:1.9;margin:20px 0 6px;}
+  #gameover .mi{border-color:#7b241d;color:#ffcabf;}
+  #gameover .mi:hover{background:#2c0e0b;border-color:#ff3b2e;color:#fff;}
+
+  /* ---------- flashes ---------- */
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;mix-blend-mode:screen;z-index:20;}
+  #vign{position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.68) 100%);}
+  #dread{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:2;
+    background:radial-gradient(ellipse at center,transparent 20%,rgba(90,0,0,.55) 100%);transition:opacity .8s;}
+  #hidebars{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .35s;z-index:20;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.97) 0 26px,transparent 26px 46px);}
+  #hidebars.on{opacity:1;}
+  #fadeout{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 1.1s;z-index:20;}
+  #fadeout.on{opacity:1;}
+
+  #toast{position:fixed;left:50%;top:64%;transform:translateX(-50%);font-size:14px;letter-spacing:3px;
+    color:#fff3d8;text-shadow:0 0 12px #000;opacity:0;transition:opacity .35s;pointer-events:none;z-index:4;}
+  #toast.on{opacity:1;}
+
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:#000;color:#a89372;font-size:13px;letter-spacing:6px;z-index:50;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- ================= HUD ================= -->
+<div class="layer" id="hud">
+  <div class="corner" id="topleft">
+    <div class="rec"><b></b>REC</div>
+    <div id="clock" style="color:#b8a47c;font-size:12px;margin-top:4px;">03:14:00 AM</div>
+  </div>
+  <div class="corner" id="topright">
+    <div style="font-size:11px;color:#9a8a68;letter-spacing:3px;">SP<span style="opacity:.6">— </span>LP</div>
+    <div style="font-size:11px;color:#9a8a68;margin-top:4px;">CH 03</div>
+  </div>
+  <div id="objective"><span class="lvl">LEVEL 1 — EMPLOYEE LOCKER ROOM</span><span id="objText">Collect the missing basketballs.</span></div>
+  <div class="corner" id="botleft">
+    <div class="ballcount"><span class="ballicon"></span><span id="ballNum">0 / 5</span></div>
+    <div class="bat"><span>BATT</span><span class="batshell"><span class="batfill" id="batFill"></span></span><span id="batPct">100%</span></div>
+  </div>
+  <div class="corner" id="botright">
+    <div style="font-size:11px;color:#9a8a68;line-height:1.8;text-align:right;">
+      CLICK FLOOR — WALK<br>CLICK OBJECT — USE<br>DRAG — LOOK &nbsp; F — LIGHT<br>I — INVENTORY &nbsp; ESC — PAUSE
+    </div>
+  </div>
+</div>
+
+<div id="vign"></div>
+<div id="dread"></div>
+<div id="hidebars"></div>
+<div id="redflash"></div>
+<div id="flash"></div>
+<div id="fadeout"></div>
+<div id="reticle"><span class="r"></span><span class="dot"></span></div>
+<div id="hovername"></div>
+<div id="caption"></div>
+<div id="toast"></div>
+
+<!-- ================= TITLE ================= -->
+<div class="layer on panel" id="title">
+  <div class="box">
+    <h1 id="titleName">AFTER THE BUZZER</h1>
+    <div class="tsub">A HORROR POINT &amp; CLICK</div>
+    <div class="menu">
+      <button class="mi" id="btnNew">▶ &nbsp;BEGIN SHIFT</button>
+      <button class="mi" id="btnLoad">▶ &nbsp;CONTINUE SHIFT</button>
+      <button class="mi" id="btnHow">▶ &nbsp;EMPLOYEE HANDBOOK</button>
+    </div>
+    <div class="foot">
+      NIGHT CUSTODIAL — SECTOR 9 — CROWN CENTER ARENA<br>
+      HEADPHONES RECOMMENDED · CONTAINS FLASHING IMAGES
+    </div>
+  </div>
+</div>
+
+<!-- ================= PAUSE ================= -->
+<div class="layer panel hidden" id="pause">
+  <div class="box">
+    <div id="pauseHead"><span class="p">❚❚ PAUSE</span><span style="font-size:12px;color:#a89372;">SP · 0:00:00</span></div>
+    <div class="track"></div>
+    <div id="stats"></div>
+    <div class="track"></div>
+    <button class="mi" id="btnResume">▶ &nbsp;RESUME</button>
+    <button class="mi" id="btnSave">▶ &nbsp;SAVE SHIFT LOG</button>
+    <button class="mi" id="btnLoad2">▶ &nbsp;LOAD SHIFT LOG</button>
+    <button class="mi" id="btnQuit">▶ &nbsp;ABANDON POST (QUIT)</button>
+  </div>
+</div>
+
+<!-- ================= INVENTORY ================= -->
+<div class="layer panel hidden" id="inv">
+  <div class="box">
+    <h2>INVENTORY</h2>
+    <div class="sub">CROWN CENTER ARENA — CUSTODIAL</div>
+    <div id="invGrid"></div>
+    <div id="invDesc">Select an item.</div>
+    <button class="mi" id="btnDossier">▶ &nbsp;THE JAMES FILE</button>
+    <button class="mi" id="btnInvClose">▶ &nbsp;CLOSE</button>
+  </div>
+</div>
+
+<!-- ================= JAMES DOSSIER ================= -->
+<div class="layer panel hidden" id="dossier">
+  <div class="box">
+    <h2>THE JAMES FILE</h2>
+    <div class="sub">EVERYTHING THE BUILDING KEPT</div>
+    <div id="dosHead"></div>
+    <div id="dosList"></div>
+    <div id="dosFoot"></div>
+    <button class="mi" id="btnDosClose">▶ &nbsp;CLOSE</button>
+  </div>
+</div>
+
+<!-- ================= NOTE READER ================= -->
+<div class="layer panel hidden" id="note">
+  <div id="notePaper">
+    <div id="noteTitle">— FOUND DOCUMENT —</div>
+    <img id="noteImg" class="hidden" alt="" />
+    <div id="noteText"></div>
+    <button class="mi" id="noteClose">CLOSE</button>
+  </div>
+</div>
+
+<!-- ================= PROMPT ================= -->
+<div class="layer panel hidden" id="prompt">
+  <div class="box">
+    <h2 id="promptTitle">CONFIRM</h2>
+    <div class="sub" id="promptSub">&nbsp;</div>
+    <p id="promptBody"></p>
+    <button class="mi" id="promptYes">▶ &nbsp;YES</button>
+    <button class="mi" id="promptNo">▶ &nbsp;NO</button>
+  </div>
+</div>
+
+<!-- ================= ENDING ================= -->
+<div class="layer panel hidden" id="ending">
+  <div class="box" style="text-align:center;">
+    <h2 id="endTitle">ENDING</h2>
+    <div class="sub" id="endSub">&nbsp;</div>
+    <p id="endBody" style="text-align:left;"></p>
+    <div id="endStats" style="font-size:12px;color:#ab9c7c;line-height:1.9;margin:18px 0;text-align:left;"></div>
+    <button class="mi" id="btnEndAgain">▶ &nbsp;CLOCK IN AGAIN</button>
+  </div>
+</div>
+
+<!-- ================= GAME OVER ================= -->
+<div class="layer panel hidden" id="gameover">
+  <div class="box">
+    <div class="sboard">
+      <div class="sbcell"><span class="sblab">HOME</span><span class="sbnum" id="goHome">00</span></div>
+      <div class="sbcell"><span class="sblab">4TH &nbsp;·&nbsp; FINAL</span><span class="sbnum sm" id="goClock">0:00</span></div>
+      <div class="sbcell"><span class="sblab">GUEST</span><span class="sbnum" id="goAway">00</span></div>
+    </div>
+    <h1 id="goTitle">GAME OVER</h1>
+    <div id="goSub">&ldquo;You missed the game-winning shot.&rdquo;</div>
+    <div id="goStats"></div>
+    <button class="mi" id="btnRestartLevel">▶ &nbsp;RESTART LEVEL</button>
+    <button class="mi" id="btnGoMenu">▶ &nbsp;MAIN MENU</button>
+  </div>
+</div>
+
+<div id="loading">LOADING TAPE…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ============================================================================
+   AFTER THE BUZZER — HORROR POINT & CLICK
+   Single-file engine.  Sections:
+     0  Config / helpers
+     1  Audio manager (fully procedural, Web Audio)
+     2  Texture factory (canvas, low-res, nearest filtered)
+     3  PS1 material factory (vertex snapping)
+     4  Prop library (low-poly arena furniture)
+     5  Level definitions + level builder
+     6  Player controller (click-to-move, collision, flashlight)
+     7  Interaction system
+     8  The Collector (antagonist AI)
+     9  Scare manager / event triggers
+     10 Inventory, save/load, endings
+     11 UI wiring
+     12 Post FX (VHS / grain / pixelation) + main loop
+   ========================================================================== */
+(function(){
+'use strict';
+
+if(!window.THREE){ document.getElementById('loading').textContent='THREE.JS FAILED TO LOAD — CHECK CONNECTION'; return; }
+
+/* ==========================================================================
+   0 — CONFIG & HELPERS
+   ========================================================================== */
+const CFG = {
+  eye:1.68, walkSpeed:1.85, turnSpeed:0.0032, radius:0.42,
+  drawDistance:70, pixelWidth:440,
+  batteryDrain:1/900,       // full charge ≈ 15 minutes of light
+  arriveDist:0.34,
+  bright:1.15               // global scale on every light source
+};
+
+const rnd  = (a,b)=>a+Math.random()*(b-a);
+const rint = (a,b)=>Math.floor(rnd(a,b+1));
+const pick = a=>a[Math.floor(Math.random()*a.length)];
+const clamp= (v,a,b)=>v<a?a:(v>b?b:v);
+const lerp = (a,b,t)=>a+(b-a)*t;
+const $ = id=>document.getElementById(id);
+const V3 = (x,y,z)=>new THREE.Vector3(x,y,z);
+
+/* ==========================================================================
+   1 — AUDIO MANAGER
+   Everything is synthesised: no external files.
+   ========================================================================== */
+const Audio = (function(){
+  let ctx=null, master=null, sfxBus=null, ambBus=null, revBus=null, ready=false;
+  let noiseBuf=null;
+  const amb = {};                 // running ambient voices
+
+  function makeNoise(sec){
+    const len = Math.floor(ctx.sampleRate*sec);
+    const b = ctx.createBuffer(1,len,ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+    return b;
+  }
+  function impulse(sec, decay){
+    const len = Math.floor(ctx.sampleRate*sec);
+    const b = ctx.createBuffer(2,len,ctx.sampleRate);
+    for(let c=0;c<2;c++){
+      const d=b.getChannelData(c);
+      for(let i=0;i<len;i++){
+        d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+      }
+    }
+    return b;
+  }
+
+  function init(){
+    if(ready) return;
+    const AC = window.AudioContext||window.webkitAudioContext;
+    if(!AC) return;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value=0.85;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value=-14; comp.ratio.value=7; comp.attack.value=0.004; comp.release.value=0.25;
+    master.connect(comp); comp.connect(ctx.destination);
+
+    sfxBus = ctx.createGain(); sfxBus.gain.value=0.9; sfxBus.connect(master);
+    ambBus = ctx.createGain(); ambBus.gain.value=0.62; ambBus.connect(master);
+
+    const conv = ctx.createConvolver(); conv.buffer = impulse(3.4, 2.2);
+    revBus = ctx.createGain(); revBus.gain.value=0.5;
+    revBus.connect(conv); conv.connect(master);
+
+    noiseBuf = makeNoise(2);
+    ready=true;
+  }
+  function resume(){ if(ctx && ctx.state==='suspended') ctx.resume(); }
+
+  function noise(dur, gainVal, type, freq, q){
+    const s = ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    const f = ctx.createBiquadFilter(); f.type=type||'bandpass'; f.frequency.value=freq||900; f.Q.value=q||1;
+    const g = ctx.createGain(); g.gain.value=0;
+    s.connect(f); f.connect(g);
+    const t=ctx.currentTime;
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(gainVal,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+    s.start(t); s.stop(t+dur+0.05);
+    return {node:g, filter:f, src:s};
+  }
+  function out(n, pos, rev){
+    if(pos){
+      const p = ctx.createPanner();
+      p.panningModel='HRTF'; p.distanceModel='exponential';
+      p.refDistance=2.2; p.rolloffFactor=1.5; p.maxDistance=60;
+      if(p.positionX){ p.positionX.value=pos.x; p.positionY.value=pos.y; p.positionZ.value=pos.z; }
+      else p.setPosition(pos.x,pos.y,pos.z);
+      n.connect(p); p.connect(sfxBus);
+      if(rev!==false){ const rg=ctx.createGain(); rg.gain.value=0.5; p.connect(rg); rg.connect(revBus); }
+    }else{
+      n.connect(sfxBus);
+      if(rev!==false){ const rg=ctx.createGain(); rg.gain.value=0.35; n.connect(rg); rg.connect(revBus); }
+    }
+  }
+
+  /* ---- listener follows camera ---- */
+  function listener(pos, fwd, up){
+    if(!ready) return;
+    const L = ctx.listener;
+    if(L.positionX){
+      L.positionX.value=pos.x; L.positionY.value=pos.y; L.positionZ.value=pos.z;
+      L.forwardX.value=fwd.x; L.forwardY.value=fwd.y; L.forwardZ.value=fwd.z;
+      L.upX.value=up.x; L.upY.value=up.y; L.upZ.value=up.z;
+    }else{
+      L.setPosition(pos.x,pos.y,pos.z);
+      L.setOrientation(fwd.x,fwd.y,fwd.z,up.x,up.y,up.z);
+    }
+  }
+
+  /* ---------------- one-shots ---------------- */
+  function footstep(v){
+    if(!ready) return;
+    const n = noise(0.16, 0.13*(v||1), 'lowpass', rnd(420,760), 1.1);
+    out(n.node,null,true);
+  }
+  function bounce(pos, power){
+    if(!ready) return;
+    const t=ctx.currentTime, p=power||1;
+    const o=ctx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(196,t); o.frequency.exponentialRampToValueAtTime(58,t+0.16);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.42*p,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0005,t+0.42);
+    o.connect(g);
+    const n = noise(0.09, 0.10*p, 'bandpass', 1900, 1.4);
+    out(g,pos,true); out(n.node,pos,true);
+    o.start(t); o.stop(t+0.5);
+  }
+  // a rolling series of bounces that speed up, like a ball settling
+  function bounceRun(pos, count){
+    if(!ready) return;
+    let d=0, gap=0.62;
+    for(let i=0;i<(count||7);i++){
+      setTimeout(()=>bounce(pos, clamp(1-i*0.09,0.25,1)), d*1000);
+      d+=gap; gap*=0.78;
+    }
+  }
+  function lockerSlam(pos){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    const n = noise(0.2, 0.30, 'bandpass', 1500, 0.8); out(n.node,pos,true);
+    [430,690,1120].forEach((f,i)=>{
+      const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=f*rnd(0.97,1.03);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.13/(i+1),t);
+      g.gain.exponentialRampToValueAtTime(0.0006,t+0.7+i*0.1);
+      o.connect(g); out(g,pos,true); o.start(t); o.stop(t+1.1);
+    });
+    const th=ctx.createOscillator(); th.type='sine'; th.frequency.setValueAtTime(90,t);
+    th.frequency.exponentialRampToValueAtTime(40,t+0.2);
+    const tg=ctx.createGain(); tg.gain.setValueAtTime(0.32,t); tg.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+    th.connect(tg); out(tg,pos,true); th.start(t); th.stop(t+0.4);
+  }
+  function pickup(){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    [880,1320].forEach((f,i)=>{
+      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,t+i*0.05);
+      g.gain.linearRampToValueAtTime(0.09,t+i*0.05+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0004,t+i*0.05+0.3);
+      o.connect(g); out(g,null,false); o.start(t+i*0.05); o.stop(t+i*0.05+0.35);
+    });
+  }
+  function ui(kind){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(); o.type='square';
+    o.frequency.value = kind==='bad'?110:kind==='ok'?520:300;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.05,t);
+    g.gain.exponentialRampToValueAtTime(0.0004,t+0.09);
+    o.connect(g); out(g,null,false); o.start(t); o.stop(t+0.1);
+  }
+  function staticBurst(dur, vol){
+    if(!ready) return;
+    const n = noise(dur||1.2, vol||0.16, 'bandpass', rnd(1200,2600), 0.7);
+    out(n.node,null,true);
+  }
+  function paAnnounce(){
+    if(!ready) return;
+    staticBurst(0.5,0.13);
+    const t=ctx.currentTime+0.35;
+    // garbled formant "speech"
+    for(let i=0;i<rint(5,9);i++){
+      const o=ctx.createOscillator(); o.type='sawtooth';
+      o.frequency.setValueAtTime(rnd(90,190), t+i*0.19);
+      const f=ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=rnd(500,1500); f.Q.value=6;
+      const g=ctx.createGain();
+      g.gain.setValueAtTime(0.0001,t+i*0.19);
+      g.gain.linearRampToValueAtTime(0.09,t+i*0.19+0.03);
+      g.gain.exponentialRampToValueAtTime(0.0004,t+i*0.19+0.16);
+      o.connect(f); f.connect(g); out(g,null,true);
+      o.start(t+i*0.19); o.stop(t+i*0.19+0.2);
+    }
+    setTimeout(()=>staticBurst(0.6,0.10), 1900);
+  }
+  function whisper(pos){
+    if(!ready) return;
+    const dur=rnd(1.6,2.8);
+    const n = noise(dur, 0.075, 'bandpass', rnd(700,1400), 9);
+    const lfo=ctx.createOscillator(); lfo.type='sine'; lfo.frequency.value=rnd(4,9);
+    const lg=ctx.createGain(); lg.gain.value=380;
+    lfo.connect(lg); lg.connect(n.filter.frequency); lfo.start(); lfo.stop(ctx.currentTime+dur);
+    out(n.node,pos,true);
+  }
+  function breath(pos){
+    if(!ready) return;
+    for(let i=0;i<3;i++){
+      setTimeout(()=>{
+        const n=noise(0.5,0.09,'bandpass',rnd(380,620),2.2);
+        out(n.node,pos,true);
+      }, i*900);
+    }
+  }
+  function water(dur){
+    if(!ready) return;
+    const n = noise(dur||4, 0.10, 'highpass', 2400, 0.6);
+    out(n.node,null,true);
+  }
+  function buzz(pos){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=118;
+    const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=900;
+    const g=ctx.createGain(); g.gain.value=0.0;
+    o.connect(f); f.connect(g); out(g,pos,true);
+    o.start(t);
+    let time=t;
+    for(let i=0;i<26;i++){ g.gain.setValueAtTime(Math.random()<0.4?0:0.045,time); time+=rnd(0.03,0.13); }
+    g.gain.setValueAtTime(0,time); o.stop(time+0.1);
+  }
+  function elevator(){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=44;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.16,t+1.4);
+    g.gain.linearRampToValueAtTime(0.0001,t+5.2);
+    o.connect(g); out(g,null,true); o.start(t); o.stop(t+5.4);
+    setTimeout(()=>lockerSlam(null), 5200);
+  }
+  function crowd(dur, vol){
+    if(!ready) return;
+    const d=dur||9;
+    const n=ctx.createBufferSource(); n.buffer=noiseBuf; n.loop=true;
+    const f=ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=760; f.Q.value=0.55;
+    const g=ctx.createGain();
+    const t=ctx.currentTime;
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(vol||0.20,t+d*0.35);
+    g.gain.linearRampToValueAtTime(0.0001,t+d);
+    // "roar" wobble
+    const lfo=ctx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.32;
+    const lg=ctx.createGain(); lg.gain.value=240; lfo.connect(lg); lg.connect(f.frequency);
+    lfo.start(t); lfo.stop(t+d);
+    n.connect(f); f.connect(g); out(g,null,true);
+    n.start(t); n.stop(t+d+0.2);
+  }
+  function heartbeat(){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    [0,0.26].forEach((off,i)=>{
+      const o=ctx.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(74,t+off); o.frequency.exponentialRampToValueAtTime(38,t+off+0.2);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t+off);
+      g.gain.exponentialRampToValueAtTime(i?0.16:0.24,t+off+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0005,t+off+0.3);
+      o.connect(g); out(g,null,false); o.start(t+off); o.stop(t+off+0.35);
+    });
+  }
+  function jumpscare(){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    const n=noise(1.5,0.55,'highpass',700,0.7); out(n.node,null,true);
+    const o=ctx.createOscillator(); o.type='sawtooth';
+    o.frequency.setValueAtTime(760,t); o.frequency.exponentialRampToValueAtTime(42,t+1.3);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.34,t); g.gain.exponentialRampToValueAtTime(0.001,t+1.5);
+    o.connect(g); out(g,null,true); o.start(t); o.stop(t+1.6);
+    const s=ctx.createOscillator(); s.type='square'; s.frequency.value=51;
+    const sg=ctx.createGain(); sg.gain.setValueAtTime(0.2,t); sg.gain.exponentialRampToValueAtTime(0.001,t+2.2);
+    s.connect(sg); out(sg,null,true); s.start(t); s.stop(t+2.3);
+  }
+  /* End-of-quarter horn. A stack of detuned square/saw partials through a
+     lowpass, gated by a fast square LFO so it rasps like a real klaxon,
+     then cut dead rather than faded. */
+  function buzzer(dur){
+    if(!ready) return;
+    const t=ctx.currentTime, d=dur||1.9;
+    const bus=ctx.createGain();
+    bus.gain.setValueAtTime(0.0001,t);
+    bus.gain.exponentialRampToValueAtTime(0.62,t+0.018);
+    bus.gain.setValueAtTime(0.62,t+d-0.05);
+    bus.gain.exponentialRampToValueAtTime(0.0006,t+d);
+
+    [110,221,330.5,440,551].forEach((f,i)=>{
+      const o=ctx.createOscillator();
+      o.type = i<2?'square':'sawtooth';
+      o.frequency.value = f*rnd(0.996,1.004);
+      const og=ctx.createGain(); og.gain.value = 0.4/(1+i*0.8);
+      o.connect(og); og.connect(bus);
+      o.start(t); o.stop(t+d+0.05);
+    });
+    const rasp=ctx.createOscillator(); rasp.type='square'; rasp.frequency.value=7.5;
+    const rg=ctx.createGain(); rg.gain.value=0.07;
+    rasp.connect(rg); rg.connect(bus.gain);
+    rasp.start(t); rasp.stop(t+d);
+
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2500; lp.Q.value=0.7;
+    bus.connect(lp);
+    out(lp,null,true);
+  }
+  function doorOpen(pos){
+    if(!ready) return;
+    const n=noise(1.1,0.12,'bandpass',520,1.6); out(n.node,pos,true);
+    setTimeout(()=>lockerSlam(pos), 1100);
+  }
+  function fail(){
+    if(!ready) return;
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(160,t);
+    o.frequency.exponentialRampToValueAtTime(70,t+0.3);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.07,t); g.gain.exponentialRampToValueAtTime(0.0005,t+0.35);
+    o.connect(g); out(g,null,false); o.start(t); o.stop(t+0.4);
+  }
+
+  /* ---------------- ambient beds ---------------- */
+  function stopAmbient(){
+    Object.keys(amb).forEach(k=>{
+      const v=amb[k]; if(!v) return;
+      try{ v.gain.gain.cancelScheduledValues(ctx.currentTime);
+           v.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+           v.nodes.forEach(n=>{ try{n.stop(ctx.currentTime+2);}catch(e){} }); }catch(e){}
+      delete amb[k];
+    });
+  }
+  // base = fundamental Hz, mood = 0..1 dread
+  function setAmbient(base, mood){
+    if(!ready) return;
+    stopAmbient();
+    const t=ctx.currentTime, nodes=[];
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.30+0.16*mood, t+4);
+    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=300+240*mood; filt.Q.value=1.4;
+    filt.connect(g); g.connect(ambBus);
+    const rg=ctx.createGain(); rg.gain.value=0.5; g.connect(rg); rg.connect(revBus);
+
+    [1, 1.5, 2.005, 2.99].forEach((m,i)=>{
+      const o=ctx.createOscillator();
+      o.type = i<2?'sawtooth':'sine';
+      o.frequency.value = base*m*rnd(0.995,1.005);
+      const og=ctx.createGain(); og.gain.value = 0.14/(i+1);
+      o.connect(og); og.connect(filt);
+      // slow drift
+      const lfo=ctx.createOscillator(); lfo.type='sine'; lfo.frequency.value=rnd(0.03,0.11);
+      const lg=ctx.createGain(); lg.gain.value=base*0.012;
+      lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); nodes.push(lfo);
+      o.start(t); nodes.push(o);
+    });
+    // air / HVAC hiss
+    const n=ctx.createBufferSource(); n.buffer=noiseBuf; n.loop=true;
+    const nf=ctx.createBiquadFilter(); nf.type='lowpass'; nf.frequency.value=460;
+    const ng=ctx.createGain(); ng.gain.value=0.05+0.03*mood;
+    n.connect(nf); nf.connect(ng); ng.connect(ambBus); n.start(t); nodes.push(n);
+
+    amb.bed={gain:g,nodes:nodes};
+  }
+  function duck(v){ if(ready) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.3); }
+
+  return { init, resume, listener, footstep, bounce, bounceRun, lockerSlam, pickup, ui,
+           staticBurst, paAnnounce, whisper, breath, water, buzz, elevator, crowd,
+           heartbeat, jumpscare, buzzer, doorOpen, fail, setAmbient, stopAmbient, duck,
+           get ready(){return ready;} };
+})();
+
+/* ==========================================================================
+   2 — TEXTURE FACTORY  (tiny canvases → nearest filter → PS1 crunch)
+   ========================================================================== */
+const TexCache = {};
+function makeTex(key, size, draw, repX, repY){
+  if(TexCache[key]) return TexCache[key];
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const g=c.getContext('2d');
+  draw(g,size);
+  const t=new THREE.CanvasTexture(c);
+  t.magFilter=THREE.NearestFilter; t.minFilter=THREE.LinearMipmapLinearFilter;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.repeat.set(repX||1, repY||1);
+  t.anisotropy=1;
+  TexCache[key]=t; return t;
+}
+function grain(g,size,base,amt,cells){
+  g.fillStyle=base; g.fillRect(0,0,size,size);
+  const s=cells||1;
+  for(let y=0;y<size;y+=s) for(let x=0;x<size;x+=s){
+    const v=(Math.random()-0.5)*amt;
+    g.fillStyle='rgba('+(v>0?255:0)+','+(v>0?255:0)+','+(v>0?255:0)+','+Math.abs(v)/255+')';
+    g.fillRect(x,y,s,s);
+  }
+}
+const TEX = {
+  concrete:(rep)=>{ const t=makeTex('concrete',64,(g,s)=>{
+      grain(g,s,'#5a5a5e',70,2);
+      g.strokeStyle='rgba(0,0,0,.22)';
+      for(let i=0;i<6;i++){ g.beginPath(); g.moveTo(Math.random()*s,Math.random()*s);
+        g.lineTo(Math.random()*s,Math.random()*s); g.stroke(); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||4,rep||4); return c; },
+  tile:(rep)=>{ const t=makeTex('tile',64,(g,s)=>{
+      grain(g,s,'#8a8b86',34,2);
+      g.strokeStyle='rgba(20,20,22,.55)'; g.lineWidth=2;
+      for(let i=0;i<=4;i++){ const p=i*s/4;
+        g.beginPath(); g.moveTo(p,0); g.lineTo(p,s); g.stroke();
+        g.beginPath(); g.moveTo(0,p); g.lineTo(s,p); g.stroke(); }
+      for(let i=0;i<40;i++){ g.fillStyle='rgba(60,55,40,'+Math.random()*0.18+')';
+        g.fillRect(Math.random()*s,Math.random()*s,rnd(1,5),rnd(1,5)); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||4,rep||4); return c; },
+  metal:(rep)=>{ const t=makeTex('metal',64,(g,s)=>{
+      grain(g,s,'#4d5560',40,1);
+      for(let x=0;x<s;x+=4){ g.fillStyle='rgba(0,0,0,.16)'; g.fillRect(x,0,1,s); }
+      for(let i=0;i<18;i++){ g.fillStyle='rgba(90,60,30,'+Math.random()*.3+')';
+        g.fillRect(Math.random()*s,Math.random()*s,rnd(1,4),rnd(2,9)); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||1,rep||1); return c; },
+  wood:(rep)=>{ const t=makeTex('wood',64,(g,s)=>{
+      grain(g,s,'#a9763c',30,1);
+      g.strokeStyle='rgba(70,40,15,.35)';
+      for(let i=0;i<22;i++){ g.beginPath(); const y=Math.random()*s;
+        g.moveTo(0,y); g.bezierCurveTo(s/3,y+rnd(-3,3),2*s/3,y+rnd(-3,3),s,y+rnd(-2,2)); g.stroke(); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||6,rep||6); return c; },
+  carpet:(rep)=>{ const t=makeTex('carpet',64,(g,s)=>{
+      grain(g,s,'#3c2a2f',48,1);
+      for(let i=0;i<70;i++){ g.fillStyle='rgba(140,40,50,'+Math.random()*.22+')';
+        g.fillRect(Math.random()*s,Math.random()*s,rnd(2,7),rnd(2,7)); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||6,rep||6); return c; },
+  ceiling:(rep)=>{ const t=makeTex('ceiling',64,(g,s)=>{
+      grain(g,s,'#6a6a68',26,2);
+      g.strokeStyle='rgba(30,30,30,.5)'; g.lineWidth=2;
+      for(let i=0;i<=2;i++){ const p=i*s/2;
+        g.beginPath(); g.moveTo(p,0); g.lineTo(p,s); g.stroke();
+        g.beginPath(); g.moveTo(0,p); g.lineTo(s,p); g.stroke(); }
+      for(let i=0;i<160;i++){ g.fillStyle='rgba(0,0,0,.14)'; g.fillRect(Math.random()*s,Math.random()*s,1,1); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||5,rep||5); return c; },
+  ball:()=>makeTex('ball',48,(g,s)=>{
+      grain(g,s,'#b1541b',26,1);
+      g.strokeStyle='#20100a'; g.lineWidth=2;
+      g.beginPath(); g.moveTo(0,s/2); g.lineTo(s,s/2); g.stroke();
+      g.beginPath(); g.moveTo(s/2,0); g.lineTo(s/2,s); g.stroke();
+      g.beginPath(); g.arc(s*0.1,s/2,s*0.42,-1,1); g.stroke();
+      g.beginPath(); g.arc(s*0.9,s/2,s*0.42,2.14,4.14); g.stroke();
+    }),
+  court:()=>makeTex('court',256,(g,s)=>{
+      grain(g,s,'#b07b3d',18,2);
+      g.strokeStyle='rgba(80,45,15,.28)';
+      for(let i=0;i<60;i++){ const y=Math.random()*s; g.beginPath(); g.moveTo(0,y); g.lineTo(s,y); g.stroke(); }
+      g.strokeStyle='#e8e2d4'; g.lineWidth=4;
+      g.strokeRect(10,10,s-20,s-20);
+      g.beginPath(); g.moveTo(s/2,10); g.lineTo(s/2,s-10); g.stroke();
+      g.beginPath(); g.arc(s/2,s/2,s*0.16,0,Math.PI*2); g.stroke();
+      g.strokeRect(10,s/2-s*0.18,s*0.22,s*0.36);
+      g.strokeRect(s-10-s*0.22,s/2-s*0.18,s*0.22,s*0.36);
+    }),
+  lockerNums:(seed,weird)=>{
+    const key='ln'+seed+(weird?'w':'');
+    const c=document.createElement('canvas'); c.width=256;c.height=64;
+    const g=c.getContext('2d');
+    grain(g,64,'#2d3a44',30,1);
+    g.fillStyle='#2d3a44'; g.fillRect(0,0,256,64);
+    for(let i=0;i<8;i++){
+      g.fillStyle='rgba(0,0,0,.35)'; g.fillRect(i*32,0,1,64);
+      g.fillStyle='#d8cfae'; g.font='bold 20px monospace'; g.textAlign='center';
+      let label;
+      if(weird) label = pick(['000','???','13','∞','//','0','00','13']);
+      else label = String((seed*8+i)%99).padStart(2,'0');
+      g.fillText(label, i*32+16, 40);
+      g.fillStyle='rgba(0,0,0,.5)'; g.fillRect(i*32+10,46,12,3);
+    }
+    const t=new THREE.CanvasTexture(c);
+    t.magFilter=THREE.NearestFilter; t.minFilter=THREE.LinearMipmapLinearFilter;
+    return t;
+  },
+  screen:(txt,col)=>{
+    const c=document.createElement('canvas'); c.width=128;c.height=96;
+    const g=c.getContext('2d');
+    g.fillStyle='#04070a'; g.fillRect(0,0,128,96);
+    for(let y=0;y<96;y+=2){ g.fillStyle='rgba(255,255,255,.03)'; g.fillRect(0,y,128,1); }
+    g.fillStyle=col||'#5be08a'; g.font='9px monospace';
+    txt.split('\n').forEach((l,i)=>g.fillText(l,7,16+i*12));
+    const t=new THREE.CanvasTexture(c);
+    t.magFilter=THREE.NearestFilter; t.minFilter=THREE.LinearFilter;
+    return t;
+  },
+  rust:(rep)=>{ const t=makeTex('rust',64,(g,s)=>{
+      grain(g,s,'#4a4239',44,1);
+      for(let i=0;i<40;i++){
+        g.fillStyle='rgba('+rint(120,168)+','+rint(52,86)+',20,'+(0.18+Math.random()*0.5)+')';
+        const x=Math.random()*s, y=Math.random()*s, r=rnd(2,9);
+        g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill();
+      }
+      for(let i=0;i<14;i++){ g.fillStyle='rgba(20,14,10,.45)';
+        g.fillRect(Math.random()*s,Math.random()*s,rnd(1,3),rnd(4,16)); }
+    }); const c=t.clone(); c.needsUpdate=true; c.repeat.set(rep||1,rep||1); return c; },
+  jersey:()=>makeTex('jersey',64,(g,s)=>{
+      grain(g,s,'#6d6152',22,1);
+      g.fillStyle='rgba(150,140,120,.30)'; g.fillRect(0,0,s,s);
+      g.fillStyle='#3c3126'; g.font='bold 34px monospace'; g.textAlign='center';
+      g.fillText('11', s/2, s*0.68);
+      g.font='bold 9px monospace';
+      g.fillText('J. ——————', s/2, s*0.24);
+      // water damage down one side
+      g.fillStyle='rgba(60,48,34,.35)'; g.fillRect(0,0,s*0.3,s);
+    })
+};
+
+/* The same team photo, defaced three different ways. Whoever did it, and
+   whether it was three people or one, is never established. */
+function teamPhotoCanvas(version){
+  const W=320, H=200;
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d');
+  // paper + faded print
+  g.fillStyle='#c9c2ae'; g.fillRect(0,0,W,H);
+  g.fillStyle='#5d6a70'; g.fillRect(12,12,W-24,H-46);
+  g.fillStyle='rgba(190,180,150,.18)'; g.fillRect(12,12,W-24,H-46);
+  // gym floor + banner behind the rows
+  g.fillStyle='#7d6134'; g.fillRect(12,H-84,W-24,26);
+  g.fillStyle='#3f4b55'; g.fillRect(40,22,W-80,20);
+  g.fillStyle='#c8bda0'; g.font='bold 10px monospace'; g.textAlign='center';
+  g.fillText('CROWN CENTER  —  STATE CHAMPIONSHIP', W/2, 36);
+
+  // two rows of players; index 6 is James, back row, second from the right
+  const JAMES=6;
+  const names=['MARCUS','D. REYES','T. HALL','SIMMS','OKAFOR','B. LOWE',
+               '','P. VANCE','COACH R.','ELLIS','J. KIM','WADE'];
+  const spots=[];
+  for(let i=0;i<12;i++){
+    const back=i<6, col=i%6;
+    const x=34+col*42, y=back?54:104, h=back?46:40;
+    spots.push({x:x, y:y, w:26, h:h, back:back, i:i});
+  }
+  spots.forEach(p=>{
+    g.fillStyle = p.i===JAMES? '#2f3c46' : '#39464f';
+    g.fillRect(p.x, p.y, p.w, p.h);                    // body
+    g.fillStyle='#8f7a63';
+    g.fillRect(p.x+6, p.y-11, 14, 13);                 // head
+    g.fillStyle='#c0b49a'; g.font='bold 8px monospace';
+    g.fillText(String(20+p.i%9), p.x+p.w/2, p.y+20);   // jersey number
+  });
+  const J=spots[JAMES];
+
+  g.textAlign='center';
+  if(version==='A'){
+    g.strokeStyle='#c02a22'; g.lineWidth=2.5;
+    g.save();
+    g.translate(J.x+J.w/2, J.y+10); g.scale(1, 1.25);
+    g.beginPath(); g.arc(0, 0, 24, 0, Math.PI*2); g.stroke();
+    g.restore();
+    // heart
+    g.fillStyle='#c02a22';
+    const hx=J.x+J.w/2+34, hy=J.y+4;
+    g.beginPath();
+    g.moveTo(hx,hy+6); g.bezierCurveTo(hx,hy,hx-9,hy,hx-9,hy+6);
+    g.bezierCurveTo(hx-9,hy+12,hx,hy+15,hx,hy+20);
+    g.bezierCurveTo(hx,hy+15,hx+9,hy+12,hx+9,hy+6);
+    g.bezierCurveTo(hx+9,hy,hx,hy,hx,hy+6); g.fill();
+    g.fillStyle='#b0231c'; g.font='italic bold 13px "Courier New",monospace';
+    g.fillText('Best teammate.', W/2, H-16);
+  }else if(version==='B'){
+    g.strokeStyle='#14100c'; g.lineWidth=3;
+    for(let i=0;i<26;i++){
+      g.beginPath();
+      g.moveTo(J.x+2+Math.random()*22, J.y-13+Math.random()*15);
+      g.lineTo(J.x+2+Math.random()*22, J.y-13+Math.random()*15);
+      g.stroke();
+    }
+    g.fillStyle='#14100c'; g.fillRect(J.x+4, J.y-12, 18, 15);
+  }else{
+    g.fillStyle='#2a2419'; g.font='7px monospace';
+    spots.forEach(p=>{
+      if(p.i===JAMES) return;
+      g.fillText(names[p.i], p.x+p.w/2, p.back? p.y+p.h+9 : p.y+p.h+11);
+    });
+    // a blank ruled line where the name should be
+    g.strokeStyle='#2a2419'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(J.x-2, J.y+J.h+7); g.lineTo(J.x+J.w+2, J.y+J.h+7); g.stroke();
+  }
+  // print wear
+  for(let i=0;i<220;i++){
+    g.fillStyle='rgba(0,0,0,'+Math.random()*0.10+')';
+    g.fillRect(Math.random()*W, Math.random()*H, 1, 1);
+  }
+  return c;
+}
+const PhotoCache={};
+function teamPhoto(version){
+  if(PhotoCache[version]) return PhotoCache[version];
+  const c=teamPhotoCanvas(version);
+  const t=new THREE.CanvasTexture(c);
+  t.magFilter=THREE.NearestFilter; t.minFilter=THREE.LinearFilter;
+  let url='';
+  try{ if(c.toDataURL) url=c.toDataURL(); }catch(e){}
+  PhotoCache[version]={tex:t, url:url};
+  return PhotoCache[version];
+}
+
+/* ==========================================================================
+   3 — PS1 MATERIAL FACTORY
+   Vertex snapping in clip space reproduces the wobbly PlayStation look.
+   ========================================================================== */
+const JITTER = {value:200.0};
+function ps1(params){
+  const m = new THREE.MeshLambertMaterial(params);
+  m.onBeforeCompile = (sh)=>{
+    sh.uniforms.uJit = JITTER;
+    sh.vertexShader = 'uniform float uJit;\n' + sh.vertexShader.replace(
+      '#include <project_vertex>',
+      [
+        'vec4 mvPosition = vec4( transformed, 1.0 );',
+        '#ifdef USE_INSTANCING',
+        '  mvPosition = instanceMatrix * mvPosition;',
+        '#endif',
+        'mvPosition = modelViewMatrix * mvPosition;',
+        'gl_Position = projectionMatrix * mvPosition;',
+        'vec3 ndc = gl_Position.xyz / gl_Position.w;',
+        'ndc.xy = floor(ndc.xy * uJit) / uJit;',
+        'gl_Position.xyz = ndc * gl_Position.w;'
+      ].join('\n')
+    );
+  };
+  m.customProgramCacheKey = ()=>'ps1';
+  return m;
+}
+
+/* ==========================================================================
+   ENGINE BOOTSTRAP
+   ========================================================================== */
+const app = $('app');
+const renderer = new THREE.WebGLRenderer({antialias:false, powerPreference:'high-performance'});
+renderer.setPixelRatio(1);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.BasicShadowMap;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.FogExp2(0x05060a, 0.055);
+
+const camera = new THREE.PerspectiveCamera(68, window.innerWidth/window.innerHeight, 0.08, CFG.drawDistance);
+camera.position.set(0,CFG.eye,0);
+scene.add(camera);
+
+const LIGHT = {
+  flash:   1.55*CFG.bright,
+  spill:   0.16*CFG.bright,
+  ambient: 0.34*CFG.bright,
+  hemi:    0.16*CFG.bright,
+  fixture: 0.90*CFG.bright,
+  title:   1.10*CFG.bright
+};
+
+/* flashlight rig */
+const flashlight = new THREE.SpotLight(0xfff2d2, LIGHT.flash, 27, Math.PI/6.2, 0.55, 1.1);
+flashlight.position.set(0.22,-0.12,0);
+flashlight.castShadow = true;
+flashlight.shadow.mapSize.set(1024,1024);
+flashlight.shadow.camera.near=0.4; flashlight.shadow.camera.far=27;
+flashlight.shadow.bias=-0.002;
+camera.add(flashlight);
+const flashTarget = new THREE.Object3D(); flashTarget.position.set(0,0,-6);
+camera.add(flashTarget); flashlight.target = flashTarget;
+const spill = new THREE.PointLight(0xbfc8dd, LIGHT.spill, 5.5, 2.0);
+camera.add(spill);
+
+const ambient = new THREE.AmbientLight(0x14161f, LIGHT.ambient);
+scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0x1b2030, 0x05060a, LIGHT.hemi);
+scene.add(hemi);
+
+const raycaster = new THREE.Raycaster();
+const clock = new THREE.Clock();
+
+/* ==========================================================================
+   WORLD CONTAINER
+   ========================================================================== */
+const world = {
+  group:null, colliders:[], walkables:[], interactables:[], hideSpots:[],
+  shiftables:[], flickerLights:[], ballSpots:[], mirrors:[], anims:[], rooms:[]
+};
+
+function clearWorld(){
+  if(world.group){
+    world.group.traverse(o=>{
+      if(o.geometry) o.geometry.dispose();
+      if(o.material){
+        const mats = Array.isArray(o.material)?o.material:[o.material];
+        mats.forEach(mm=>{ if(mm.map && mm.map.__keep!==true) {} mm.dispose(); });
+      }
+    });
+    scene.remove(world.group);
+  }
+  world.group = new THREE.Group(); scene.add(world.group);
+  world.colliders=[]; world.walkables=[]; world.interactables=[]; world.hideSpots=[];
+  world.shiftables=[]; world.flickerLights=[]; world.ballSpots=[]; world.mirrors=[];
+  world.anims=[]; world.rooms=[]; world.jamesLocker=null; world.photos=[];
+}
+
+/* --- builder helpers --- */
+const B = {
+  add(m){ world.group.add(m); return m; },
+  box(w,h,d,mat,x,y,z){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true;
+    return B.add(m);
+  },
+  solid(mesh, padX, padZ){
+    const b=new THREE.Box3().setFromObject(mesh);
+    world.colliders.push({minX:b.min.x-(padX||0),maxX:b.max.x+(padX||0),
+                          minZ:b.min.z-(padZ||0),maxZ:b.max.z+(padZ||0)});
+    return mesh;
+  },
+  collide(x,z,w,d){
+    world.colliders.push({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2});
+  },
+  spot(x,y,z){ world.ballSpots.push(V3(x,y,z)); },
+  interact(mesh, def){
+    mesh.userData.I = Object.assign({range:3.4}, def);
+    world.interactables.push(mesh);
+    return mesh;
+  }
+};
+
+/* ==========================================================================
+   4 — PROP LIBRARY
+   ========================================================================== */
+const MATS = {}; // rebuilt per level so textures can be tinted
+
+function buildMaterials(cfg){
+  MATS.floor   = ps1({map:TEX[cfg.floorTex||'concrete'](cfg.floorRep||5), color:cfg.floorTint||0x8f8f95});
+  MATS.wall    = ps1({map:TEX.concrete(2.4), color:cfg.wallTint||0x7d8088});
+  MATS.wall2   = ps1({map:TEX.tile(2.6), color:cfg.wallTint2||0x9aa0a2});
+  MATS.ceil    = ps1({map:TEX.ceiling(4), color:0x5d6068});
+  MATS.metal   = ps1({map:TEX.metal(1), color:0x93a0ad});
+  MATS.dark    = ps1({color:0x2a2d33});
+  MATS.darker  = ps1({color:0x15171b});
+  MATS.wood    = ps1({map:TEX.wood(2), color:0xb08a55});
+  MATS.paint   = ps1({color:cfg.accent||0x7a2b2b});
+  MATS.paint2  = ps1({color:cfg.accent2||0x1f3a63});
+  MATS.rubber  = ps1({color:0x22242a});
+  MATS.plastic = ps1({color:0x555f6b});
+  MATS.glass   = new THREE.MeshBasicMaterial({color:0x0a1018, transparent:true, opacity:0.34});
+  MATS.chrome  = ps1({color:0xb9c3cc});
+  MATS.paper   = ps1({color:0xd9d2b8});
+  MATS.ball    = ps1({map:TEX.ball(), color:0xffffff, emissive:0x1a0800});
+  MATS.court   = ps1({map:TEX.court(), color:0xffffff});
+  MATS.seat    = ps1({color:cfg.accent||0x6d1f26});
+  MATS.void    = new THREE.MeshBasicMaterial({color:0x000000});
+}
+
+/* -- ceiling light fixture (dead, but flickers during events) -- */
+function fixture(x,y,z,rot){
+  const g=new THREE.Group();
+  const shell=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.12,0.34), MATS.metal);
+  const tube=new THREE.Mesh(new THREE.BoxGeometry(1.32,0.06,0.2),
+    new THREE.MeshBasicMaterial({color:0x0a0c10}));
+  tube.position.y=-0.08;
+  g.add(shell); g.add(tube);
+  g.position.set(x,y,z); if(rot) g.rotation.y=rot;
+  const L=new THREE.PointLight(0xdfe8ff, 0, 7.5, 2);
+  L.position.set(x,y-0.3,z); B.add(L);
+  world.flickerLights.push({light:L, tube:tube, on:false});
+  return B.add(g);
+}
+
+/* -- locker bank: n lockers along +X -- */
+function lockerBank(x,z,rotY,count,seed,hideable){
+  const g=new THREE.Group();
+  const w=0.42, h=1.9, d=0.5;
+  const numTex = TEX.lockerNums(seed,false);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(w*count, h, d), MATS.metal);
+  body.position.y=h/2; body.castShadow=body.receiveShadow=true; g.add(body);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(w*count+0.06,0.07,d+0.06), MATS.dark);
+  top.position.y=h+0.03; g.add(top);
+  const faceMat = ps1({map:numTex, color:0xcfd7dd});
+  faceMat.__numbers = true;
+  const doors=[];
+  for(let i=0;i<count;i++){
+    const dr=new THREE.Mesh(new THREE.BoxGeometry(w-0.04,h-0.1,0.05), faceMat.clone());
+    dr.material.map = numTex.clone();
+    dr.material.map.needsUpdate=true;
+    dr.material.map.repeat.set(1/count*1,1);
+    dr.material.map.offset.set(i/count,0);
+    dr.position.set(-w*count/2 + w*(i+0.5), h/2, d/2+0.03);
+    dr.castShadow=true;
+    dr.userData.pivotX = dr.position.x - (w-0.04)/2;
+    doors.push(dr); g.add(dr);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY||0;
+  B.add(g);
+  const halfW = Math.abs(Math.cos(rotY||0))*w*count/2 + Math.abs(Math.sin(rotY||0))*d/2;
+  const halfD = Math.abs(Math.sin(rotY||0))*w*count/2 + Math.abs(Math.cos(rotY||0))*d/2;
+  B.collide(x,z,halfW*2+0.25, halfD*2+0.25);
+  // shelf spots on top
+  for(let i=0;i<count;i+=3){
+    const lx = -w*count/2 + w*(i+1.5);
+    const p = new THREE.Vector3(lx,h+0.18,0).applyAxisAngle(V3(0,1,0), rotY||0).add(V3(x,0,z));
+    B.spot(p.x,p.y,p.z);
+  }
+  const bank = {group:g, doors:doors, seed:seed, faces:doors.map(d=>d.material)};
+  world.shiftables.push({type:'lockers', obj:bank});
+  if(hideable!==false){
+    const fwd = new THREE.Vector3(0,0,1).applyAxisAngle(V3(0,1,0), rotY||0);
+    const hp = V3(x,0,z).add(fwd.clone().multiplyScalar(0.95));
+    makeHideSpot(hp.x, hp.z, 'LOCKER', V3(x,0,z).add(fwd.clone().multiplyScalar(0.1)));
+  }
+  return bank;
+}
+
+/* The one locker nobody ever reassigned. Single unit, rusted through, door
+   buckled and hanging off true, still carrying its championship stickers. */
+function jamesLocker(x,z,rotY){
+  const g=new THREE.Group();
+  const w=0.56, h=1.92, d=0.52;
+  const rustMat = ps1({map:TEX.rust(1), color:0x9a8b78});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), rustMat);
+  body.position.y=h/2; body.castShadow=body.receiveShadow=true; g.add(body);
+  // dust ridge along the top
+  const top=new THREE.Mesh(new THREE.BoxGeometry(w+0.05,0.08,d+0.05),
+    ps1({color:0x6a6355, roughness:1}));
+  top.position.y=h+0.04; g.add(top);
+  // dark interior so the open door reads as a cavity
+  const cavity=new THREE.Mesh(new THREE.BoxGeometry(w-0.07,h-0.16,d-0.06),
+    new THREE.MeshBasicMaterial({color:0x05060a}));
+  cavity.position.set(0,h/2,0.03); g.add(cavity);
+
+  // faded jersey on a bent hanger
+  const jersey=new THREE.Mesh(new THREE.PlaneGeometry(0.36,0.62),
+    ps1({map:TEX.jersey(), color:0xb9ad96, side:THREE.DoubleSide}));
+  jersey.position.set(0,1.18,0.08); g.add(jersey);
+  const hanger=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.02,0.02), MATS.metal);
+  hanger.position.set(0,1.5,0.08); hanger.rotation.z=0.06; g.add(hanger);
+
+  // cracked trophy on the shelf
+  const trophy=new THREE.Group();
+  const cup=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.04,0.11,7),
+    ps1({color:0xb08b3a, emissive:0x1a1206}));
+  cup.position.y=0.15; trophy.add(cup);
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,0.06,6), MATS.metal);
+  stem.position.y=0.07; trophy.add(stem);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.04,0.1), MATS.dark);
+  base.position.y=0.02; trophy.add(base);
+  const crack=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.2,0.005),
+    new THREE.MeshBasicMaterial({color:0x000000}));
+  crack.position.set(0.035,0.13,0.055); crack.rotation.z=0.18; trophy.add(crack);
+  trophy.position.set(-0.11,1.72,0.04); trophy.rotation.y=0.5; g.add(trophy);
+
+  // the folded note, tucked in the jersey
+  const paper=new THREE.Mesh(new THREE.PlaneGeometry(0.13,0.16),
+    ps1({color:0xd8d0b4, side:THREE.DoubleSide}));
+  paper.position.set(0.02,1.05,0.14); paper.rotation.set(-0.15,0.1,0.05); g.add(paper);
+
+  // buckled door, hanging ajar on one hinge
+  const door=new THREE.Mesh(new THREE.BoxGeometry(w-0.05,h-0.12,0.045), rustMat.clone());
+  door.geometry.translate((w-0.05)/2,0,0);        // hinge on the left edge
+  door.position.set(-(w-0.05)/2, h/2, d/2+0.03);
+  door.rotation.y=-0.22; door.rotation.z=0.03;    // never sat straight again
+  door.castShadow=true; g.add(door);
+  // championship stickers, sun-bleached
+  [[0.16,1.42,0xc8a24a],[0.12,1.18,0x8a2b24],[0.14,0.92,0x2c4f74]].forEach(s=>{
+    const st=new THREE.Mesh(new THREE.PlaneGeometry(s[0],s[0]*0.62),
+      new THREE.MeshBasicMaterial({color:s[2], transparent:true, opacity:0.55}));
+    st.position.set(w*0.42, s[1]-h/2, 0.03); door.add(st);
+  });
+
+  g.position.set(x,0,z); g.rotation.y=rotY||0; B.add(g);
+  const hw=Math.abs(Math.cos(rotY||0))*w/2 + Math.abs(Math.sin(rotY||0))*d/2;
+  const hd=Math.abs(Math.sin(rotY||0))*w/2 + Math.abs(Math.cos(rotY||0))*d/2;
+  B.collide(x,z,hw*2+0.3, hd*2+0.3);
+
+  // generous invisible hit targets — the real props are small and thin
+  const target=(hw2,hh,hd2,px,py,pz)=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(hw2,hh,hd2),
+      new THREE.MeshBasicMaterial({visible:false}));
+    m.position.set(px,py,pz); g.add(m); return m;
+  };
+  const rec={group:g, door:door, opened:false, pos:V3(x,0,z),
+             jersey:target(0.4,0.66,0.2, 0,1.18,0.1),
+             trophy:target(0.24,0.3,0.24, -0.11,1.78,0.06),
+             paper: target(0.24,0.24,0.2, 0.02,1.05,0.16)};
+  // the whole unit is one hit target until it is opened
+  const hit=target(w+0.2,h,d+0.5, 0,h/2,0.2);
+  B.interact(hit,{type:'jlocker', label:'A LOCKER NOBODY REASSIGNED', data:rec, range:3.2});
+  rec.hit=hit;
+  world.jamesLocker=rec;
+  return rec;
+}
+
+/* A copy of the team photo, taped or framed on a wall. */
+function teamPhotoBoard(x,y,z,rotY,version){
+  const ph=teamPhoto(version);
+  const g=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.4,0.03), MATS.dark);
+  g.add(frame);
+  const print=new THREE.Mesh(new THREE.PlaneGeometry(0.52,0.34),
+    new THREE.MeshBasicMaterial({map:ph.tex}));
+  print.position.z=0.02; g.add(print);
+  g.position.set(x,y,z); g.rotation.y=rotY||0; B.add(g);
+  const def=PHOTO_VERSIONS[version];
+  B.interact(print,{type:'photo', label:'TEAM PHOTOGRAPH',
+                    data:{version:version, id:def.id, title:def.title, text:def.text, url:ph.url},
+                    range:3.0});
+  return g;
+}
+
+function bench(x,z,rotY,len){
+  const g=new THREE.Group();
+  const L=len||2.4;
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(L,0.09,0.42), MATS.wood);
+  seat.position.y=0.46; seat.castShadow=seat.receiveShadow=true; g.add(seat);
+  for(const s of [-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.46,0.36), MATS.metal);
+    leg.position.set(s*(L/2-0.22),0.23,0); g.add(leg);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY||0; B.add(g);
+  B.collide(x,z, Math.abs(Math.cos(rotY||0))*L+0.5, Math.abs(Math.sin(rotY||0))*L+0.5);
+  B.spot(x,0.62,z);
+  return g;
+}
+
+function trashCan(x,z){
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.2,0.72,8), MATS.plastic);
+  m.position.set(x,0.36,z); m.castShadow=true; B.add(m); B.collide(x,z,0.6,0.6);
+  return m;
+}
+function mopCart(x,z,rotY){
+  const g=new THREE.Group();
+  const bucket=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.5,0.44), ps1({color:0xd8b520}));
+  bucket.position.y=0.35; g.add(bucket);
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.4,6), MATS.wood);
+  handle.position.set(0.2,0.95,0); handle.rotation.z=0.22; g.add(handle);
+  const bag=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.4), ps1({color:0x39424e}));
+  bag.position.set(-0.55,0.5,0); g.add(bag);
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,1.5,0.9); B.spot(x,0.72,z);
+  return g;
+}
+function shelfRack(x,z,rotY,w){
+  const g=new THREE.Group(); const W=w||2.0;
+  for(let i=0;i<3;i++){
+    const sh=new THREE.Mesh(new THREE.BoxGeometry(W,0.06,0.5), MATS.metal);
+    sh.position.y=0.4+i*0.62; sh.castShadow=sh.receiveShadow=true; g.add(sh);
+  }
+  for(const s of[-1,1]){
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.7,0.5), MATS.metal);
+    p.position.set(s*(W/2-0.05),0.85,0); g.add(p);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY||0; B.add(g);
+  B.collide(x,z,Math.abs(Math.cos(rotY||0))*W+0.6,Math.abs(Math.sin(rotY||0))*W+0.6);
+  B.spot(x,1.08,z); B.spot(x,0.5,z);
+  return g;
+}
+function showerStall(x,z,rotY){
+  const g=new THREE.Group();
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(0.08,2.2,1.2), MATS.wall2);
+  wall.position.set(-0.6,1.1,0); g.add(wall);
+  const wall2=wall.clone(); wall2.position.x=0.6; g.add(wall2);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(1.2,2.2,0.08), MATS.wall2);
+  back.position.set(0,1.1,-0.6); g.add(back);
+  const pipe=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.5,6), MATS.chrome);
+  pipe.position.set(0,1.95,-0.4); pipe.rotation.x=0.7; g.add(pipe);
+  const head=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.05,0.08,8), MATS.chrome);
+  head.position.set(0,1.82,-0.24); g.add(head);
+  g.position.set(x,0,z); g.rotation.y=rotY||0;
+  g.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});
+  B.add(g);
+  B.collide(x,z,1.4,1.4);
+  const stall={group:g, head:head, on:false, pos:V3(x,1.8,z)};
+  world.anims.push({type:'shower', data:stall});
+  return stall;
+}
+function toiletStall(x,z,rotY){
+  const g=new THREE.Group();
+  const side=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.9,1.5), ps1({color:0x5c6a5f}));
+  side.position.set(-0.55,1.05,0); g.add(side);
+  const side2=side.clone(); side2.position.x=0.55; g.add(side2);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.9,0.06), ps1({color:0x5c6a5f}));
+  back.position.set(0,1.05,-0.75); g.add(back);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.6,0.05), ps1({color:0x64735f}));
+  door.position.set(0,1.05,0.72); g.add(door);
+  const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.15,0.4,8), ps1({color:0xd7d9d2}));
+  bowl.position.set(0,0.2,-0.4); g.add(bowl);
+  g.position.set(x,0,z); g.rotation.y=rotY||0;
+  g.traverse(o=>{o.castShadow=true;});
+  B.add(g); B.collide(x,z,1.3,1.7);
+  const fwd = new THREE.Vector3(0,0,1).applyAxisAngle(V3(0,1,0), rotY||0);
+  makeHideSpot(x+fwd.x*1.5, z+fwd.z*1.5, 'STALL', V3(x,0,z));
+  world.anims.push({type:'stallDoor', data:{door:door, base:0, group:g}});
+  return g;
+}
+function sinkRow(x,z,rotY,count){
+  const g=new THREE.Group(); const n=count||3;
+  const counter=new THREE.Mesh(new THREE.BoxGeometry(n*0.9,0.1,0.55), ps1({color:0x2f3338}));
+  counter.position.y=0.86; g.add(counter);
+  const front=new THREE.Mesh(new THREE.BoxGeometry(n*0.9,0.8,0.06), ps1({color:0x25282c}));
+  front.position.set(0,0.45,0.26); g.add(front);
+  for(let i=0;i<n;i++){
+    const bx = -n*0.45 + 0.45 + i*0.9;
+    const basin=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.14,8), ps1({color:0xcfd3cf}));
+    basin.position.set(bx,0.87,0); g.add(basin);
+    const tap=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.22,0.05), MATS.chrome);
+    tap.position.set(bx,1.0,-0.2); g.add(tap);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,Math.abs(Math.cos(rotY||0))*n*0.9+0.8, Math.abs(Math.sin(rotY||0))*n*0.9+0.8);
+  return g;
+}
+function mirrorPanel(x,y,z,rotY,w,h){
+  const geo=new THREE.PlaneGeometry(w||2.6,h||1.2);
+  const mat=new THREE.MeshBasicMaterial({color:0x0d1218});
+  const m=new THREE.Mesh(geo,mat);
+  m.position.set(x,y,z); m.rotation.y=rotY||0;
+  B.add(m);
+  const frame=new THREE.Mesh(new THREE.BoxGeometry((w||2.6)+0.1,(h||1.2)+0.1,0.05), MATS.dark);
+  frame.position.set(x,y,z); frame.rotation.y=rotY||0;
+  frame.translateZ(-0.04); B.add(frame);
+  // reflection ghost (hidden until triggered)
+  const ghost = collectorSilhouette(0.85);
+  ghost.visible=false;
+  const fwd=new THREE.Vector3(0,0,1).applyAxisAngle(V3(0,1,0),rotY||0);
+  ghost.position.set(x-fwd.x*0.55, 0, z-fwd.z*0.55);
+  ghost.rotation.y=(rotY||0)+Math.PI;
+  ghost.scale.setScalar(0.9);
+  B.add(ghost);
+  const rec={plane:m, ghost:ghost, pos:V3(x,y,z), used:false};
+  world.mirrors.push(rec);
+  B.interact(m,{type:'mirror',label:'MIRROR',data:rec,range:2.6});
+  return rec;
+}
+function treadmill(x,z,rotY){
+  const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.25,1.9), MATS.darker);
+  base.position.y=0.13; g.add(base);
+  const belt=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.05,1.55), MATS.rubber);
+  belt.position.y=0.27; g.add(belt);
+  const post=new THREE.Mesh(new THREE.BoxGeometry(0.7,1.1,0.08), MATS.metal);
+  post.position.set(0,0.75,-0.85); post.rotation.x=-0.12; g.add(post);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.5,0.3),
+    new THREE.MeshBasicMaterial({map:TEX.screen('  0.0 MPH\n  00:00\n  ----','#3ad07a')}));
+  scr.position.set(0,1.25,-0.83); scr.rotation.x=0.22; g.add(scr);
+  scr.visible=false;
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>{o.castShadow=true;});
+  B.add(g); B.collide(x,z,1.6,2.4);
+  world.anims.push({type:'monitor', data:{mesh:scr}});
+  return g;
+}
+function weightRack(x,z,rotY){
+  const g=new THREE.Group();
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,0.4), MATS.metal);
+  bar.position.y=0.9; g.add(bar);
+  const bar2=bar.clone(); bar2.position.y=0.35; g.add(bar2);
+  for(const s of[-1,1]){
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.0,0.4), MATS.metal);
+    p.position.set(s*1.05,0.5,0); g.add(p);
+  }
+  for(let i=0;i<5;i++){
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.07,10), MATS.darker);
+    w.rotation.z=Math.PI/2; w.position.set(-0.85+i*0.42,1.06,0); g.add(w);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,2.6,1.0); B.spot(x,0.5,z);
+  return g;
+}
+function ballRack(x,z,rotY){
+  const g=new THREE.Group();
+  for(let i=0;i<3;i++){
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.05,0.05), MATS.metal);
+    bar.position.set(0,0.35+i*0.5,-0.22); g.add(bar);
+    const bar2=bar.clone(); bar2.position.z=0.22; g.add(bar2);
+  }
+  for(const s of[-1,1]){
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.5,0.06), MATS.metal);
+    p.position.set(s*0.62,0.75,-0.22); g.add(p);
+    const p2=p.clone(); p2.position.z=0.22; g.add(p2);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,1.6,1.0);
+  B.spot(x,0.5,z); B.spot(x,1.0,z); B.spot(x,1.5,z);
+  return g;
+}
+function hoop(x,z,rotY,scaleV){
+  const g=new THREE.Group(); const s=scaleV||1;
+  const pole=new THREE.Mesh(new THREE.BoxGeometry(0.2,3.2*s,0.2), MATS.darker);
+  pole.position.y=1.6*s; g.add(pole);
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,1.0*s), MATS.darker);
+  arm.position.set(0,3.0*s,0.5*s); g.add(arm);
+  const board=new THREE.Mesh(new THREE.BoxGeometry(1.8*s,1.05*s,0.06),
+    new THREE.MeshBasicMaterial({color:0x181c22, transparent:true, opacity:0.75}));
+  board.position.set(0,3.05*s,1.0*s); g.add(board);
+  const sq=new THREE.Mesh(new THREE.PlaneGeometry(0.6*s,0.45*s),
+    new THREE.MeshBasicMaterial({color:0xd8d2c0,wireframe:true}));
+  sq.position.set(0,2.95*s,1.04*s); g.add(sq);
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(0.23*s,0.025,6,12), ps1({color:0xd2451c,emissive:0x200500}));
+  rim.rotation.x=Math.PI/2; rim.position.set(0,2.75*s,1.28*s); g.add(rim);
+  const net=new THREE.Mesh(new THREE.CylinderGeometry(0.22*s,0.13*s,0.4*s,8,1,true),
+    new THREE.MeshBasicMaterial({color:0xd8d8d0,wireframe:true,transparent:true,opacity:0.55}));
+  net.position.set(0,2.55*s,1.28*s); g.add(net);
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>{o.castShadow=true;});
+  B.add(g); B.collide(x,z,0.8,0.8);
+  return g;
+}
+function medBed(x,z,rotY){
+  const g=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.1,2.0), MATS.chrome);
+  frame.position.y=0.62; g.add(frame);
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(0.84,0.14,1.9), ps1({color:0x2c3f4a}));
+  pad.position.y=0.72; g.add(pad);
+  for(const sx of[-1,1]) for(const sz of[-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.62,0.06), MATS.chrome);
+    leg.position.set(sx*0.38,0.31,sz*0.9); g.add(leg);
+  }
+  const sheet=new THREE.Mesh(new THREE.BoxGeometry(0.88,0.05,1.1), ps1({color:0xbfc6c2}));
+  sheet.position.set(0,0.81,0.4); g.add(sheet);
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,1.6,2.6); B.spot(x,0.95,z);
+  return g;
+}
+function monitorStand(x,z,rotY,txt){
+  const g=new THREE.Group();
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,1.3,6), MATS.chrome);
+  pole.position.y=0.65; g.add(pole);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.4,0.24), MATS.plastic);
+  body.position.y=1.45; g.add(body);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.42,0.3),
+    new THREE.MeshBasicMaterial({map:TEX.screen(txt||' -- NO SIGNAL --\n\n  ______','#4be08a')}));
+  scr.position.set(0,1.45,0.13); g.add(scr); scr.visible=false;
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,0.7,0.7);
+  world.anims.push({type:'monitor', data:{mesh:scr}});
+  return g;
+}
+function cabinet(x,z,rotY){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.8,0.45), ps1({color:0xa8b0ae}));
+  body.position.y=0.9; g.add(body);
+  const glassM=new THREE.Mesh(new THREE.PlaneGeometry(0.85,0.7), MATS.glass);
+  glassM.position.set(0,1.35,0.24); g.add(glassM);
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,1.4,1.0); B.spot(x,1.95,z);
+  return g;
+}
+function concession(x,z,rotY,label){
+  const g=new THREE.Group();
+  const counter=new THREE.Mesh(new THREE.BoxGeometry(4.2,1.1,0.8), ps1({color:0x30363d}));
+  counter.position.y=0.55; g.add(counter);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(4.4,0.08,1.0), MATS.chrome);
+  top.position.y=1.14; g.add(top);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(4.4,2.6,0.2), MATS.dark);
+  back.position.set(0,1.5,-1.4); g.add(back);
+  const signTex=TEX.screen(label||'  CONCESSIONS\n\n  CLOSED','#d8a34a');
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.7),
+    new THREE.MeshBasicMaterial({map:signTex, transparent:true, opacity:0.5}));
+  sign.position.set(0,2.2,-1.28); g.add(sign);
+  // shutter that opens/closes on its own
+  const shutter=new THREE.Mesh(new THREE.BoxGeometry(4.3,1.6,0.08), MATS.metal);
+  shutter.position.set(0,2.1,0.4); g.add(shutter);
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});
+  B.add(g); B.collide(x,z,Math.abs(Math.cos(rotY||0))*4.4+1.0, Math.abs(Math.sin(rotY||0))*4.4+1.6);
+  B.spot(x,1.35,z);
+  world.anims.push({type:'shutter', data:{mesh:shutter, base:2.1, t:0, open:true}});
+  return g;
+}
+function sofa(x,z,rotY){
+  const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.42,0.85), ps1({color:0x3b2f36}));
+  seat.position.y=0.35; g.add(seat);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.62,0.22), ps1({color:0x3b2f36}));
+  back.position.set(0,0.75,-0.32); g.add(back);
+  g.position.set(x,0,z); g.rotation.y=rotY||0; g.traverse(o=>o.castShadow=true);
+  B.add(g); B.collide(x,z,2.4,1.4); B.spot(x,0.66,z);
+  return g;
+}
+function tvPanel(x,y,z,rotY){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.9,0.09), MATS.darker);
+  g.add(body);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.8),
+    new THREE.MeshBasicMaterial({map:TEX.screen('  CROWN CENTER\n  FEED 04\n\n  ...........','#7fd0e8')}));
+  scr.position.z=0.06; g.add(scr); scr.visible=false;
+  g.position.set(x,y,z); g.rotation.y=rotY||0; B.add(g);
+  world.anims.push({type:'monitor', data:{mesh:scr}});
+  return g;
+}
+function pipes(x,z,y,len,rotY){
+  const g=new THREE.Group();
+  for(let i=0;i<3;i++){
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,len||6,6), MATS.metal);
+    p.rotation.z=Math.PI/2; p.position.set(0,i*0.22,0); g.add(p);
+  }
+  g.position.set(x,y||2.5,z); g.rotation.y=rotY||0; B.add(g);
+  return g;
+}
+function crate(x,z,s){
+  const sz=s||0.8;
+  const m=new THREE.Mesh(new THREE.BoxGeometry(sz,sz,sz), MATS.wood);
+  m.position.set(x,sz/2,z); m.rotation.y=rnd(0,3); m.castShadow=m.receiveShadow=true;
+  B.add(m); B.collide(x,z,sz+0.5,sz+0.5); B.spot(x,sz+0.14,z);
+  return m;
+}
+function fuseBox(x,y,z,rotY){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.75,0.16), ps1({color:0x6f7a5f}));
+  g.add(body);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.68,0.04), ps1({color:0x828d70}));
+  door.position.z=0.1; g.add(door);
+  const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.04,6,5),
+    new THREE.MeshBasicMaterial({color:0x551208}));
+  lamp.position.set(0.17,0.28,0.13); g.add(lamp);
+  g.position.set(x,y,z); g.rotation.y=rotY||0; B.add(g);
+  return {group:g, lamp:lamp, door:door};
+}
+function seatBowl(cx,cz,innerW,innerD,rows,rise){
+  const geo=new THREE.BoxGeometry(0.46,0.42,0.44);
+  const count=(Math.floor(innerW/0.5)*2 + Math.floor(innerD/0.5)*2)*rows;
+  const mesh=new THREE.InstancedMesh(geo, MATS.seat, count);
+  mesh.castShadow=false; mesh.receiveShadow=true;
+  const mtx=new THREE.Matrix4(); let i=0;
+  for(let r=0;r<rows;r++){
+    const ow = innerW + r*1.1, od = innerD + r*1.1, y=0.25+r*rise;
+    const nx=Math.floor(ow/0.55), nz=Math.floor(od/0.55);
+    for(let k=0;k<nx;k++){
+      const x=cx-ow/2 + (k+0.5)*(ow/nx);
+      [cz-od/2, cz+od/2].forEach(z=>{ if(i<count){ mtx.makeTranslation(x,y,z); mesh.setMatrixAt(i++,mtx);} });
+    }
+    for(let k=0;k<nz;k++){
+      const z=cz-od/2 + (k+0.5)*(od/nz);
+      [cx-ow/2, cx+ow/2].forEach(x=>{ if(i<count){ mtx.makeTranslation(x,y,z); mesh.setMatrixAt(i++,mtx);} });
+    }
+  }
+  mesh.count=i; mesh.instanceMatrix.needsUpdate=true;
+  B.add(mesh);
+  return mesh;
+}
+
+/* -- a slice of the seating bowl beyond a concourse portal / suite window -- */
+function bowlAnnex(cx, zFront, w, d, rows, walkable){
+  const cz = zFront + d/2;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(w,d), MATS.floor);
+  floor.rotation.x=-Math.PI/2; floor.position.set(cx,0,cz); floor.receiveShadow=true;
+  B.add(floor);
+  if(walkable) world.walkables.push(floor);
+  // rising rows of seats, going away from the player
+  const geo=new THREE.BoxGeometry(0.46,0.42,0.44);
+  const perRow=Math.floor(w/0.62);
+  const mesh=new THREE.InstancedMesh(geo, MATS.seat, perRow*rows);
+  mesh.receiveShadow=true;
+  const mtx=new THREE.Matrix4(); let i=0;
+  for(let r=0;r<rows;r++){
+    const z = zFront + 1.6 + r*0.95;
+    const y = 0.25 + r*0.42;
+    for(let k=0;k<perRow;k++){
+      mtx.makeTranslation(cx-w/2+0.4+k*0.62, y, z);
+      mesh.setMatrixAt(i++,mtx);
+    }
+    // the step the row sits on
+    const step=new THREE.Mesh(new THREE.BoxGeometry(w,0.42,0.95), MATS.dark);
+    step.position.set(cx, y-0.42, z); step.receiveShadow=true; B.add(step);
+    B.collide(cx, z, w, 0.95);
+  }
+  mesh.count=i; mesh.instanceMatrix.needsUpdate=true; B.add(mesh);
+  // boundary so you never walk off the edge of the world
+  const backH=9;
+  const back=new THREE.Mesh(new THREE.BoxGeometry(w+1.2,backH,0.3), MATS.darker);
+  back.position.set(cx, backH/2, zFront+d); B.add(back);
+  B.collide(cx, zFront+d, w+1.2, 0.6);
+  for(const s of [-1,1]){
+    const sw=new THREE.Mesh(new THREE.BoxGeometry(0.3,backH,d), MATS.darker);
+    sw.position.set(cx+s*w/2, backH/2, cz); B.add(sw);
+    B.collide(cx+s*w/2, cz, 0.6, d);
+  }
+  if(walkable){
+    world.rooms.push({x:cx, z:zFront+0.8, w:w-1.4, d:1.4, h:6, type:'bowl', open:{}});
+    B.spot(cx-w/4, 0.14, zFront+0.7);
+    B.spot(cx+w/4, 0.14, zFront+0.7);
+  }
+  return {center:V3(cx,1.2,cz)};
+}
+
+/* ---- hide spots ---- */
+function makeHideSpot(x,z,label,facePos){
+  // hiding teleports the player here, so it has to be somewhere they can stand
+  if(collides(x,z,0.45)) return null;
+  const geo=new THREE.BoxGeometry(0.7,1.8,0.7);
+  const mat=new THREE.MeshBasicMaterial({visible:false});
+  const m=new THREE.Mesh(geo,mat); m.position.set(x,0.9,z);
+  B.add(m);
+  const rec={mesh:m, pos:V3(x,0,z), face:facePos||V3(x,0,z-1), label:label||'HIDE'};
+  world.hideSpots.push(rec);
+  B.interact(m,{type:'hide',label:'HIDE IN '+(label||'SPOT'),data:rec,range:2.6});
+  return rec;
+}
+
+/* ---- pickups ---- */
+function spawnBall(p){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(0.122,10,8), MATS.ball);
+  m.position.copy(p); m.castShadow=true;
+  m.rotation.set(rnd(0,6),rnd(0,6),rnd(0,6));
+  B.add(m);
+  B.interact(m,{type:'ball',label:'BASKETBALL',range:2.9});
+  m.userData.home = p.clone();
+  return m;
+}
+function spawnItem(p,item){
+  let m;
+  if(item.kind==='note'){
+    m=new THREE.Mesh(new THREE.PlaneGeometry(0.24,0.3), ps1({color:0xd8d0b4, side:THREE.DoubleSide}));
+    m.rotation.x=-Math.PI/2+rnd(-0.1,0.1); m.rotation.z=rnd(0,3);
+    m.position.copy(p); m.position.y=Math.max(p.y,0.03);
+  }else if(item.kind==='frag'){
+    // smaller and greyer than an official document — these are scraps
+    m=new THREE.Mesh(new THREE.PlaneGeometry(0.17,0.21), ps1({color:0xb8b09a, side:THREE.DoubleSide}));
+    m.rotation.x=-Math.PI/2+rnd(-0.14,0.14); m.rotation.z=rnd(0,3);
+    m.position.copy(p); m.position.y=Math.max(p.y,0.025);
+  }else if(item.kind==='battery'){
+    m=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.16,8), ps1({color:0x2b6f3f, emissive:0x061a0d}));
+    m.position.copy(p); m.position.y=Math.max(p.y,0.09); m.rotation.z=Math.PI/2;
+  }else{
+    m=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.03,0.11), ps1({color:item.color||0xc9a13a, emissive:0x120c02}));
+    m.position.copy(p); m.position.y=Math.max(p.y,0.04);
+  }
+  m.castShadow=true; B.add(m);
+  const TYPE={note:'note', frag:'frag', battery:'battery'};
+  B.interact(m,{type:TYPE[item.kind]||'item',
+                label:item.label, data:item, range:2.9});
+  return m;
+}
+
+/* ==========================================================================
+   THE COLLECTOR — silhouette model
+   ========================================================================== */
+function collectorSilhouette(scaleV){
+  const s=scaleV||1;
+  const g=new THREE.Group();
+  const M=new THREE.MeshBasicMaterial({color:0x000000, fog:true});
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.5*s,1.25*s,0.3*s), M);
+  torso.position.y=1.55*s; g.add(torso);
+  const hips=new THREE.Mesh(new THREE.BoxGeometry(0.42*s,0.35*s,0.28*s), M);
+  hips.position.y=0.95*s; g.add(hips);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.3*s,0.46*s,0.3*s), M);
+  head.position.y=2.4*s; g.add(head);
+  const neck=new THREE.Mesh(new THREE.BoxGeometry(0.11*s,0.28*s,0.11*s), M);
+  neck.position.y=2.12*s; g.add(neck);
+  const limbs=[];
+  for(const sx of[-1,1]){
+    const up=new THREE.Mesh(new THREE.BoxGeometry(0.13*s,0.85*s,0.13*s), M);
+    up.position.set(sx*0.33*s,1.72*s,0); up.geometry.translate(0,-0.42*s,0); up.position.y=2.14*s;
+    g.add(up); limbs.push(up);
+    const lo=new THREE.Mesh(new THREE.BoxGeometry(0.11*s,0.95*s,0.11*s), M);
+    lo.geometry.translate(0,-0.47*s,0); lo.position.set(0,-0.84*s,0); up.add(lo); limbs.push(lo);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.15*s,1.0*s,0.15*s), M);
+    leg.geometry.translate(0,-0.5*s,0); leg.position.set(sx*0.14*s,0.92*s,0); g.add(leg); limbs.push(leg);
+    const shin=new THREE.Mesh(new THREE.BoxGeometry(0.13*s,0.92*s,0.13*s), M);
+    shin.geometry.translate(0,-0.46*s,0); shin.position.set(0,-0.98*s,0); leg.add(shin); limbs.push(shin);
+  }
+  const eyeM=new THREE.MeshBasicMaterial({color:0xff7a1e, fog:false});
+  const eyes=[];
+  for(const sx of[-1,1]){
+    const e=new THREE.Mesh(new THREE.SphereGeometry(0.055*s,7,6), eyeM);
+    e.position.set(sx*0.075*s, 2.44*s, 0.16*s); g.add(e); eyes.push(e);
+  }
+  g.userData.eyes=eyes; g.userData.eyeMat=eyeM; g.userData.limbs=limbs; g.userData.head=head;
+  return g;
+}
+
+/* ==========================================================================
+   5 — LEVEL DEFINITIONS
+   ========================================================================== */
+const NOTES = [
+  {id:'n1', title:'CUSTODIAL WORK ORDER #4471', text:
+   'FINAL TASK — NIGHT OF THE 14TH\n\nRetrieve ALL practice basketballs from the lower levels.\nCount must match inventory before you clock out.\n\nIf the count does not match, DO NOT LEAVE THE BUILDING.\nSubmit a variance report and remain on site until\nthe count is correct.\n\n— Facilities'},
+  {id:'n2', title:'TAPED TO LOCKER 07', text:
+   'to whoever has this shift next:\n\nthe balls move. i know how that sounds.\ni stacked eleven of them by the door and when\ni came back there were nine, and one was\nsitting in the middle of the hallway.\n\ndont count out loud. it hears you counting.'},
+  {id:'n3', title:'INCIDENT LOG — SECURITY', text:
+   '01:52 — Motion, Sector 9. No personnel on site.\n02:03 — PA system active. No input from booth.\n02:11 — Camera 14 shows figure in Section 108.\n        Height estimate: 8 ft. Feed lost.\n02:19 — Count of persons in building: 1.\n02:20 — Count of persons in building: 2.\n02:21 — Count of persons in building: 1.'},
+  {id:'n4', title:'PATIENT INTAKE — UNFILED', text:
+   'NAME: [redacted]\nPOS: Custodial, night\nCOMPLAINT: "hears the ball bouncing in the walls"\n\nPatient describes a tall figure standing at the\nend of every hallway he enters. States the figure\n"is only there when the count is wrong."\n\nDISCHARGED. Did not clock out. Not seen since.'},
+  {id:'n5', title:'ARENA HISTORY — PAGE 12', text:
+   'Before the arena, the lot held a public court.\nOpen all night. Kids played until the lights cut.\n\nThe city poured the foundation over it in \'94.\nThey never removed the court. They paved it.\n\nThe last game there never finished.\nThe buzzer never sounded.'},
+  {id:'n6', title:'HAND-WRITTEN, WATER DAMAGED', text:
+   'it isnt a ghost. its a scorekeeper.\n\nit collects what was left behind. balls, shoes,\npeople. anything still on the floor when the\nlights went out. it puts them somewhere it can\ncount them.\n\nif you give it back what you took it lets you go.\nif you keep even one it keeps you.'},
+  {id:'n7', title:'FINAL PAGE', text:
+   'THE COLLECTOR\n\nIt was a boy who stayed late.\nThe lights cut. He kept shooting in the dark\nbecause the game was not over.\n\nThe buzzer never sounded, so for him it never\nended. He is still waiting for the final whistle.\n\nGive him the ball. All of them.\nThen the game can end.'}
+];
+
+/* ==========================================================================
+   THE JAMES MYSTERY
+   Loose testimony left behind in the building. These accounts are NOT meant
+   to agree with each other, and none of them is the authoritative version —
+   including the ones written with the most certainty. `lv` is the level the
+   scrap can turn up in, `voice` is who is talking, `kind` only drives how the
+   entry is filed in the dossier.
+   ========================================================================== */
+const FRAGMENTS = [
+  /* ---- level 1 : staff, secondhand, already distorted ---- */
+  {id:'f_name', lv:1, kind:'meta', voice:'SHIFT NOTE — INSIDE LOCKER 12',
+   text:'His name was James.\n\nI am writing it down because everybody here just\ncalls him "the kid" now, like he never had one.\n\nTwenty years of people telling this story and not\none of them has gotten it the same way twice.'},
+  {id:'f_bulletin', lv:1, kind:'cold', voice:'BREAK ROOM BULLETIN — DEFACED',
+   text:'REMINDER: Staff are not to discuss the 1994\nchampionship game with visiting school groups.\nDirect all questions to the front office.\n\nUnderneath, in ballpoint, pressed hard enough\nto tear the paper:\n\n     ask them what they did to him'},
+  {id:'f_hire', lv:1, kind:'warm', voice:'EMPLOYMENT CARD — NEVER FILED',
+   text:'APPLICANT: James —————\nAGE: 17\nPOSITION SOUGHT: Court crew, evenings\n\nIn the box marked WHY DO YOU WANT TO WORK HERE\nhe wrote:\n\n"So I can be in the gym after it closes."\n\nSomebody has drawn a box around that sentence.\nNothing else on the card is marked.'},
+
+  /* ---- level 2 : the warm accounts ---- */
+  {id:'f_freethrows', lv:2, kind:'warm', voice:'FOLDED IN A JERSEY POCKET',
+   text:'He stayed after practice helping me with free\nthrows when nobody else would.\n\nI was the worst player on that roster and he\nnever once made me feel like it. He just kept\nrebounding for me until the custodian kicked\nus out.\n\nI don\'t recognise the person people describe now.'},
+  {id:'f_nicest', lv:2, kind:'warm', voice:'YEARBOOK MARGIN, BALLPOINT',
+   text:'Honestly one of the nicest guys on the team.\n\nThat\'s it. That\'s the whole thing I wanted to\nsay. Everyone keeps adding stuff to it.'},
+  {id:'f_quiet', lv:2, kind:'warm', voice:'LETTER, NEVER SENT',
+   text:'People always thought James was weird, but he\nwas just quiet.\n\nThere is a difference and nobody in that building\never bothered to learn it. Quiet is not the same\nas dangerous. Quiet is not the same as anything.\n\nHe asked me once if I thought the team liked him.\nI said of course. I don\'t know if that was true.'},
+
+  /* ---- level 3 : the cold accounts ---- */
+  {id:'f_losing', lv:3, kind:'cold', voice:'STATEMENT — UNSIGNED',
+   text:'James took losing way too seriously.\n\nA scrimmage. A drill. It didn\'t matter. He\'d go\nsomewhere behind his own eyes and you couldn\'t\nget him back until he\'d won something.\n\nWe all thought it was funny. For a while.'},
+  {id:'f_lifeordeath', lv:3, kind:'cold', voice:'ASSISTANT COACH — LOOSE PAGE',
+   text:'Every game felt like life or death to him.\n\nI have coached four hundred kids. You learn to\nspot the ones who are playing because they love\nit and the ones who are playing because they are\nrunning from something.\n\nI knew which one he was. I did nothing about it.'},
+  {id:'f_stopped', lv:3, kind:'cold', voice:'TEAMMATE, WRITTEN MUCH LATER',
+   text:'He stopped talking to everyone once the playoffs\nstarted.\n\nNot angry. Not rude. Just gone. He\'d sit in front\nof his locker in full uniform an hour before\nanyone else showed up, staring at the floor.\n\nI walked past him maybe thirty times that month\nand never once asked if he was okay.'},
+
+  /* ---- level 4 : rumour, graffiti, the story mutating ---- */
+  {id:'f_stall', lv:4, kind:'meta', voice:'SCRATCHED ABOVE THE SINK',
+   text:'JAMES WAS HERE\n\nUnderneath, in a different hand, newer:\n\n     he still is\n\nUnderneath that, newer still, in marker:\n\n     you people made him up'},
+  {id:'f_changed', lv:4, kind:'cold', voice:'WATER-DAMAGED PAGE',
+   text:'Something changed after the championship game.\n\nEverybody says that sentence. Nobody who says it\nwill tell you what they mean by it, and when you\npush, the details move around.\n\nOne of them told me he screamed. One of them told\nme he didn\'t say a word. They were standing next\nto each other.'},
+
+  /* ---- level 5 : the gym, obsession, and its defence ---- */
+  {id:'f_equipment', lv:5, kind:'meta', voice:'EQUIPMENT LOG — 1993/94',
+   text:'BALL CART — SIGNED OUT / RETURNED\n\nThe same handwriting on nearly every line for a\nfull season. Some nights twice.\n\nNobody made him do this. There is no coach\'s\ninitial anywhere on the page.\n\nThe last entry is signed out. It was never\nsigned back in.'},
+  {id:'f_2am', lv:5, kind:'cold', voice:'CUSTODIAL COMPLAINT — 02/94',
+   text:'Found the same student in the practice gym again\nat 2AM. Lights off. Shooting in the dark.\n\nI asked him why he didn\'t turn them on.\n\nHe said the lights were a distraction.\n\nI have thought about that answer for thirty years\nand I still don\'t know if it was a joke.'},
+  {id:'f_wanted', lv:5, kind:'warm', voice:'REPLY, TAPED UNDER A BENCH',
+   text:'He wasn\'t crazy. He was the only one of us who\nactually wanted it.\n\nWe all said we did. He was the only one who acted\nlike it was true, and we punished him for it, and\nnow that he\'s gone we call it a warning sign.'},
+
+  /* ---- level 6 : injury, care, and a decision nobody owns ---- */
+  {id:'f_injury', lv:6, kind:'warm', voice:'GET WELL CARD — UNDELIVERED',
+   text:'He was the only teammate who checked on me after\nmy injury.\n\nEvery day for six weeks. He\'d bring the box scores\nand read them out loud so I\'d feel like I was\nstill on the team.\n\nWhen people tell me what he supposedly was, I let\nthem finish and then I stop talking to them.'},
+  {id:'f_trainer', lv:6, kind:'cold', voice:'TRAINER\'S NOTE — LOOSE, UNFILED',
+   text:'Recommended the player be held out of the final.\nHe asked me not to. He was very calm about it.\n\nHe said: "If I don\'t play it, it doesn\'t end."\n\nI wrote him cleared. I have never shown this page\nto anyone and I am not going to.'},
+
+  /* ---- level 7 : the championship, version by version ---- */
+  {id:'f_champ_blame', lv:7, kind:'game', voice:'SPRAYED INSIDE A SERVICE DOOR',
+   text:'WE LOST BECAUSE OF JAMES\n\nNo date. No name. Painted over twice by facilities\nand cut back through both times.'},
+  {id:'f_champ_notthere', lv:7, kind:'game', voice:'LETTER TO THE SPORTS DESK',
+   text:'Your article is wrong and I would like that\nprinted.\n\nJames wasn\'t even on the court. He was on the\nbench for the entire fourth quarter. I know\nbecause I was sitting eleven rows up watching\nhim not play.\n\nYou cannot lose a game you were not in.'},
+  {id:'f_champ_timeout', lv:7, kind:'game', voice:'BOOSTER CLUB MINUTES — MARGIN',
+   text:'Coach should\'ve called a timeout.\n\nThirty-one seconds. Two on the bench. He called\nnothing and he let it run out and every single\nperson in that building watched him do it.\n\nThen we spent thirty years talking about a kid.'},
+
+  /* ---- level 8 : the versions multiply ---- */
+  {id:'f_champ_refs', lv:8, kind:'game', voice:'SUITE GUEST BOOK — BACK PAGE',
+   text:'The refs blew the call.\n\nIt wasn\'t close, it wasn\'t a judgement thing, it\nwas simply the wrong call and it decided the game\nand everyone who was actually there knows it.\n\nNobody wants that version. It has no villain in it.'},
+  {id:'f_champ_scapegoat', lv:8, kind:'game', voice:'TYPED, NO LETTERHEAD',
+   text:'We all blamed James because we needed someone to\nblame.\n\nThat is the entire story. There is nothing under\nit. We were seventeen and we lost the biggest\ngame of our lives and we handed the whole weight\nof it to the quietest person in the room because\nhe was the least likely to hand it back.'},
+  {id:'f_coach', lv:8, kind:'contra', voice:'COACH R. — INTERVIEW, UNPUBLISHED',
+   text:'People blame James for everything now.\n\nThat\'s easy when someone isn\'t around to defend\nthemselves.\n\nAsk them what he actually did. Watch how long it\ntakes them to answer, and watch how the answer\nchanges depending on who else is in the room.'},
+
+  /* ---- level 9 : the last word, and the collapse of the story ---- */
+  {id:'f_senior', lv:9, kind:'contra', voice:'SENIOR PLAYER — SIGNED, THEN CROSSED OUT',
+   text:'I don\'t care what anyone says.\n\nThe night of the championship, something was\nwrong with him. I\'ve never seen someone look\nthat angry.\n\nI have told this story so many times that I can\nno longer tell you whether I am remembering his\nface or remembering the last time I told it.'},
+  {id:'f_tenstories', lv:9, kind:'meta', voice:'THE LAST PAGE IN THE BOX',
+   text:'The weird thing is nobody can agree on what\nhappened.\n\nAsk ten people and you\'ll get ten different\nstories.\n\nI have all ten in this box. I have read them\nuntil I know them by heart and I am no closer\nthan I was when I started.\n\nHe was a kid. That part everyone agrees on.\nThat part is the only part.'},
+  {id:'f_yearbook', lv:9, kind:'meta', voice:'YEARBOOK PAGE, TORN',
+   text:'Under his photo, where every other senior has a\nquote, his line reads:\n\n     "I just want to finish the ——————"\n\nThe rest of the page is gone. It was torn out,\nnot lost — the edge is clean on the left and\nragged on the right, like somebody pulled.'}
+];
+
+/* Inside James's locker. The final note is the emotional turn of the story
+   and is deliberately the only account written in his own hand. */
+const JAMES_LOCKER_ITEMS = [
+  {id:'j_jersey', kind:'james', voice:'THE JERSEY',
+   text:'A home jersey on a bent wire hanger, gone the\ncolour of weak tea.\n\nNumber 11. The name tape above it has been picked\noff, slowly, the way you pick at something while\nyou are thinking about something else. A single\nletter survives at the front.\n\nIt has been folded at the shoulders by somebody\nwho cared how it hung.'},
+  {id:'j_trophy', kind:'james', voice:'THE CRACKED TROPHY',
+   text:'A small trophy, split from the rim of the cup\ndown through the base. Someone tried to glue it\nand gave up halfway.\n\nThe plate reads:\n\n     CROWN CENTER — CHAMPIONS\n\nThe year has been scratched out so thoroughly\nthat the metal underneath is bright.\n\nRunner-up trophies are not engraved CHAMPIONS.\nNobody has ever explained why this one is.'},
+  {id:'j_final', kind:'james', voice:'FOLDED INSIDE THE JERSEY — IN HIS HAND',
+   text:'They keep talking about me like they knew me.\n\nThe truth is none of them did.\n\nSome thought I cared too much.\nSome thought I didn\'t care at all.\n\nMaybe that\'s why nobody noticed when I needed\nhelp.'}
+];
+
+/* Same photograph, three defacements, six copies hanging around the building. */
+const PHOTO_VERSIONS = {
+  A:{id:'ph_A', title:'TEAM PHOTO — 1993/94',
+     text:'Somebody has drawn a ring around the boy in the\nback row and inked a heart beside him.\n\nUnder the ring, in careful handwriting:\n\n     Best teammate.\n\nThere is no signature. The pen matches nothing\nelse in the building.'},
+  B:{id:'ph_B', title:'TEAM PHOTO — 1993/94',
+     text:'The same photograph. Same row, same boy.\n\nHis face has been scratched out — not crossed\nthrough, scratched, over and over, until the\nemulsion is gone and the paper underneath is\nfurred.\n\nEveryone else in the frame is untouched.'},
+  C:{id:'ph_C', title:'TEAM PHOTO — 1993/94',
+     text:'The same photograph again. Every player has been\nlabelled in neat block capitals beneath the\nrows — first initial, surname, all twelve.\n\nEleven names. One blank ruled line, drawn with\na straightedge, left empty.\n\nThe line is not a mistake. Somebody measured it.'}
+};
+const PHOTO_PLACEMENTS = [
+  {v:'A', lv:2}, {v:'A', lv:5},
+  {v:'B', lv:3}, {v:'B', lv:8},
+  {v:'C', lv:7}, {v:'C', lv:9}
+];
+const TOTAL_TESTIMONY = FRAGMENTS.length + JAMES_LOCKER_ITEMS.length;
+
+const LEVELS = [
+  { id:1, name:'EMPLOYEE LOCKER ROOM', balls:5,
+    key:{id:'k_maint', label:'MAINTENANCE KEY', desc:'A worn brass key on a plastic fob stamped CROWN CENTER — SVC.'},
+    doorLabel:'SERVICE DOOR', obj:'Collect the missing basketballs. Find the maintenance key.',
+    floorTex:'concrete', floorRep:6, accent:0x3f4f6b, accent2:0x2b3340, fog:0.052, drone:41,
+    note:'n1', tier:0,
+    rooms:[{w:14,d:10,type:'lockerRoom'},{w:11,d:8,type:'breakRoom'}] },
+
+  { id:2, name:'HOME TEAM LOCKER ROOM', balls:8,
+    key:{id:'k_home', label:'TEAM BADGE', desc:'A magnetic badge. The photo on it has been scratched away.'},
+    doorLabel:'PLAYER TUNNEL DOOR', obj:'Collect the basketballs. The showers are running.',
+    floorTex:'carpet', floorRep:7, accent:0x6a1f2a, accent2:0xb2913c, fog:0.055, drone:38,
+    note:'n2', tier:0,
+    rooms:[{w:16,d:12,type:'teamLocker'},{w:11,d:9,type:'showers'}] },
+
+  { id:3, name:'VISITING TEAM LOCKER ROOM', balls:10,
+    key:{id:'k_radio', label:'SECURITY RADIO', desc:'Channel 3. It hisses even when you switch it off.'},
+    doorLabel:'CORRIDOR DOOR', obj:'Collect the basketballs. Something is on the radio.',
+    floorTex:'carpet', floorRep:7, accent:0x2c4f74, accent2:0x8a9099, fog:0.058, drone:36,
+    note:'n3', tier:1,
+    rooms:[{w:14,d:11,type:'teamLocker'},{w:10,d:8,type:'showers'}] },
+
+  { id:4, name:'PLAYER BATHROOMS', balls:8,
+    key:{id:'k_jan', label:'JANITOR RING', desc:'Six keys. Only one is warm.'},
+    doorLabel:'EXIT DOOR', obj:'Collect the basketballs. Do not look at the mirrors too long.',
+    floorTex:'tile', floorRep:8, accent:0x38574d, accent2:0x707a72, fog:0.06, drone:34,
+    note:'n4', tier:1,
+    rooms:[{w:12,d:9,type:'bathroom'},{w:12,d:9,type:'bathroom2'}] },
+
+  { id:5, name:'TRAINING FACILITY', balls:12,
+    key:{id:'k_fuse', label:'CERAMIC FUSE', desc:'30 amp. Still warm to the touch.'},
+    doorLabel:'POWERED DOOR', obj:'Collect the basketballs. Restore power at the fuse box.',
+    floorTex:'wood', floorRep:9, accent:0x7a4a1c, accent2:0x30506b, fog:0.05, drone:33,
+    note:'n5', tier:1, fuse:true,
+    rooms:[{w:20,d:16,type:'gym'},{w:12,d:10,type:'gym2'}] },
+
+  { id:6, name:'MEDICAL CENTER', balls:6,
+    key:{id:'k_med', label:'MED WING CARD', desc:'A keycard. The magnetic strip is scored with fingernail marks.'},
+    doorLabel:'CARD READER DOOR', obj:'Collect the basketballs. The monitors keep turning on.',
+    floorTex:'tile', floorRep:7, accent:0x2f6060, accent2:0x9aa8a4, fog:0.062, drone:31,
+    note:'n6', tier:2,
+    rooms:[{w:14,d:10,type:'medical'},{w:10,d:8,type:'medical2'}] },
+
+  { id:7, name:'CONCOURSE LEVEL', balls:15,
+    key:{id:'k_suite', label:'SUITE ELEVATOR KEY', desc:'Round barrel key. Stamped: LEVEL 3 ONLY.'},
+    doorLabel:'SUITE ELEVATOR', obj:'Collect the basketballs. The seats are not empty.',
+    floorTex:'tile', floorRep:10, accent:0x5d2430, accent2:0x8b7a4a, fog:0.048, drone:30,
+    note:'n7', tier:2,
+    rooms:[{w:26,d:9,type:'concourse'},{w:22,d:9,type:'concourse2'}] },
+
+  { id:8, name:'VIP SUITES', balls:10,
+    key:{id:'k_svc', label:'SERVICE TUNNEL KEY', desc:'Heavy iron. Older than the building.'},
+    doorLabel:'SERVICE STAIRWELL', obj:'Collect the basketballs. The suites are occupied.',
+    floorTex:'carpet', floorRep:6, accent:0x4a3550, accent2:0xa08a4a, fog:0.055, drone:29,
+    note:null, tier:3,
+    rooms:[{w:13,d:9,type:'suite'},{w:13,d:9,type:'suite'},{w:13,d:9,type:'suite'}] },
+
+  { id:9, name:'SERVICE TUNNELS', balls:12,
+    key:{id:'k_court', label:'COURT ACCESS KEY', desc:'It is already unlocked. It has always been unlocked.'},
+    doorLabel:'TUNNEL TO COURT', obj:'Collect the basketballs. Find the way to the floor. Hide if it comes.',
+    floorTex:'concrete', floorRep:4, accent:0x3a3a3a, accent2:0x5a5a5a, fog:0.09, drone:27,
+    note:null, tier:3, maze:true,
+    rooms:null },
+
+  { id:10, name:'MAIN COURT', balls:1,
+    key:null, doorLabel:'CENTER COURT', obj:'Return what was left behind.',
+    floorTex:'concrete', floorRep:4, accent:0x6d1f26, accent2:0xc8a24a, fog:0.028, drone:24,
+    note:null, tier:4, arena:true,
+    rooms:null }
+];
+const TOTAL_BALLS = LEVELS.reduce((a,l)=>a+l.balls,0);
+
+/* ==========================================================================
+   LAYOUT / ROOM BUILDER
+   ========================================================================== */
+function chainLayout(specs){
+  const rooms=[]; let z=0;
+  specs.forEach((s,i)=>{
+    if(i>0){
+      const cd = 7;
+      z -= cd/2;
+      rooms.push({x:0,z:z,w:3.4,d:cd,h:2.7,type:'corridor',
+                  open:{n:[{at:0,w:2.4}], s:[{at:0,w:2.4}]}});
+      z -= cd/2;
+    }
+    z -= s.d/2;
+    const open={};
+    if(i>0) open.s=[{at:0,w:2.4}];
+    if(i<specs.length-1) open.n=[{at:0,w:2.4}];
+    rooms.push({x:0,z:z,w:s.w,d:s.d,h:s.h||3.3,type:s.type,open:open, index:i});
+    z -= s.d/2;
+  });
+  return rooms;
+}
+
+function buildWallRun(axis, fixed, from, to, y0, h, openings, mat, inset){
+  // axis 'x': wall runs along X at z=fixed.  axis 'z': runs along Z at x=fixed.
+  const t=0.28;
+  const segs=[]; let cursor=from;
+  const ops=(openings||[]).slice().sort((a,b)=>a.center-b.center);
+  ops.forEach(o=>{
+    const a=o.center-o.w/2, b=o.center+o.w/2;
+    if(a>cursor) segs.push([cursor,a]);
+    cursor=Math.max(cursor,b);
+  });
+  if(cursor<to) segs.push([cursor,to]);
+  segs.forEach(s=>{
+    const len=s[1]-s[0]; if(len<=0.02) return;
+    const mid=(s[0]+s[1])/2;
+    let m;
+    if(axis==='x'){
+      m=new THREE.Mesh(new THREE.BoxGeometry(len,h,t), mat);
+      m.position.set(mid, y0+h/2, fixed + inset*t/2);
+      B.collide(mid, fixed+inset*t/2, len, t+0.1);
+    }else{
+      m=new THREE.Mesh(new THREE.BoxGeometry(t,h,len), mat);
+      m.position.set(fixed + inset*t/2, y0+h/2, mid);
+      B.collide(fixed+inset*t/2, mid, t+0.1, len);
+    }
+    m.castShadow=true; m.receiveShadow=true; B.add(m);
+  });
+  // header above openings so you can't see the void
+  ops.forEach(o=>{
+    const hh = h-2.15; if(hh<=0.05) return;
+    let m;
+    if(axis==='x'){
+      m=new THREE.Mesh(new THREE.BoxGeometry(o.w,hh,t), mat);
+      m.position.set(o.center, y0+2.15+hh/2, fixed+inset*t/2);
+    }else{
+      m=new THREE.Mesh(new THREE.BoxGeometry(t,hh,o.w), mat);
+      m.position.set(fixed+inset*t/2, y0+2.15+hh/2, o.center);
+    }
+    m.receiveShadow=true; B.add(m);
+  });
+}
+
+function buildRoom(r, wallMat){
+  const hw=r.w/2, hd=r.d/2, h=r.h||3.2;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(r.w,r.d), MATS.floor);
+  floor.rotation.x=-Math.PI/2; floor.position.set(r.x,0,r.z); floor.receiveShadow=true;
+  B.add(floor); world.walkables.push(floor);
+  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(r.w,r.d), MATS.ceil);
+  ceil.rotation.x=Math.PI/2; ceil.position.set(r.x,h,r.z); B.add(ceil);
+
+  const mat = wallMat||MATS.wall;
+  const conv = (list, center)=> (list||[]).map(o=>({center:center+o.at, w:o.w}));
+  buildWallRun('x', r.z-hd, r.x-hw, r.x+hw, 0, h, conv(r.open&&r.open.n, r.x), mat, +1);
+  buildWallRun('x', r.z+hd, r.x-hw, r.x+hw, 0, h, conv(r.open&&r.open.s, r.x), mat, -1);
+  buildWallRun('z', r.x-hw, r.z-hd, r.z+hd, 0, h, conv(r.open&&r.open.w, r.z), mat, +1);
+  buildWallRun('z', r.x+hw, r.z-hd, r.z+hd, 0, h, conv(r.open&&r.open.e, r.z), mat, -1);
+  world.rooms.push(r);
+  return r;
+}
+
+/* ---- exit door ---- */
+function makeExitDoor(x,z,rotY,label,lvl){
+  const g=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.3,0.16), MATS.dark);
+  frame.position.y=1.15; g.add(frame);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.1,0.1), ps1({color:0x5c6470}));
+  door.position.set(0,1.05,0.08); g.add(door);
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.07,0.07), MATS.chrome);
+  bar.position.set(0,1.0,0.16); g.add(bar);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.22),
+    new THREE.MeshBasicMaterial({map:TEX.screen(' '+label,'#c93a2a'), transparent:true}));
+  sign.position.set(0,2.35,0.1); g.add(sign);
+  g.position.set(x,0,z); g.rotation.y=rotY||0;
+  g.traverse(o=>{o.castShadow=true;});
+  B.add(g); B.collide(x,z,1.6,0.9);
+  B.interact(door,{type:'door',label:label,data:{lvl:lvl},range:3.0});
+  return g;
+}
+
+/* ==========================================================================
+   PER-ROOM DRESSING
+   ========================================================================== */
+/* Every prop is placed relative to the room centre (cx,cz).  Doorways sit at the
+   middle of the north and south walls, so nothing solid may occupy |x-cx| < 1.6
+   within ~2m of those walls or the level becomes impassable. */
+function dressRoom(r, cfg, isLast){
+  const hw=r.w/2, hd=r.d/2, cx=r.x, cz=r.z;
+  const N=cz-hd, S=cz+hd, W=cx-hw, E=cx+hw;   // wall coordinates
+  switch(r.type){
+    case 'corridor':{
+      fixture(cx, r.h-0.14, cz, 0);
+      if(Math.random()<0.6) trashCan(cx+(Math.random()<0.5?-1:1)*1.05, cz+rnd(-hd*0.6,hd*0.6));
+      pipes(cx, cz, r.h-0.35, r.d*0.9, Math.PI/2);
+      break;
+    }
+    case 'lockerRoom':{
+      lockerBank(W+1.2, N+3.0, Math.PI/2, 8, 1);
+      lockerBank(W+1.2, N+6.6, Math.PI/2, 8, 2);
+      lockerBank(E-1.2, N+3.0, -Math.PI/2, 8, 3);
+      lockerBank(E-1.2, N+6.6, -Math.PI/2, 8, 4);
+      lockerBank(cx-3.7, N+0.9, Math.PI, 5, 5, false);   // flanking the doorway
+      lockerBank(cx+3.7, N+0.9, Math.PI, 5, 6, false);
+      bench(cx-3.0, N+4.8, 0);
+      bench(cx+3.0, N+4.8, 0);
+      mopCart(E-2.2, S-1.6, 2.1);
+      trashCan(W+1.4, S-1.2);
+      fixture(cx, r.h-0.14, cz-2.4, 0);
+      fixture(cx, r.h-0.14, cz+2.4, 0);
+      break;
+    }
+    case 'breakRoom':{
+      B.box(1.6,0.08,0.9, MATS.wood, cx-1.5, 0.76, cz-1.0);
+      B.collide(cx-1.5,cz-1.0,2.2,1.6); B.spot(cx-1.5,0.9,cz-1.0);
+      for(let i=0;i<3;i++){
+        const c=B.box(0.42,0.05,0.42, MATS.plastic, cx-1.5+rnd(-1,1), 0.46, cz-1.0+rnd(-1.2,1.2));
+        c.rotation.y=rnd(0,3);
+      }
+      shelfRack(E-1.0, cz-1.5, -Math.PI/2, 2.4);
+      B.box(0.75,1.75,0.7, ps1({color:0xb9bcb4}), E-1.0, 0.88, cz+1.8);
+      B.collide(E-1.0, cz+1.8, 1.4, 1.4);
+      B.spot(E-1.0, 1.85, cz+1.8);
+      trashCan(W+1.0, cz+1.5);
+      makeHideSpot(W+1.9, cz-1.6, 'SUPPLY NOOK');
+      fixture(cx, r.h-0.14, cz, Math.PI/2);
+      break;
+    }
+    case 'teamLocker':{
+      lockerBank(W+1.3, N+3.2, Math.PI/2, 6, 11);
+      lockerBank(W+1.3, N+7.0, Math.PI/2, 6, 12);
+      lockerBank(E-1.3, N+3.2, -Math.PI/2, 6, 13);
+      lockerBank(E-1.3, N+7.0, -Math.PI/2, 6, 14);
+      lockerBank(cx-3.9, N+0.9, Math.PI, 6, 15, false);
+      lockerBank(cx+3.9, N+0.9, Math.PI, 6, 16, false);
+      bench(cx-3.2, N+5.0, 0, 3.0);
+      bench(cx+3.2, N+5.0, 0, 3.0);
+      const logo=new THREE.Mesh(new THREE.CircleGeometry(1.7,14),
+        ps1({color:cfg.accent, emissive:0x030303}));
+      logo.rotation.x=-Math.PI/2; logo.position.set(cx,0.012,S-3.0); B.add(logo);
+      const ring=new THREE.Mesh(new THREE.RingGeometry(1.7,1.95,18),
+        new THREE.MeshBasicMaterial({color:cfg.accent2, side:THREE.DoubleSide}));
+      ring.rotation.x=-Math.PI/2; ring.position.set(cx,0.014,S-3.0); B.add(ring);
+      const wb=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.4),
+        new THREE.MeshBasicMaterial({map:TEX.screen('  X   O   X\n   \\ /\n    O --> ?\n\n  GAME 82','#c8c2ae')}));
+      wb.position.set(cx-hw+2.2, 1.7, N+0.2); B.add(wb);
+      ballRack(E-2.5, S-2.0, -0.6);
+      mopCart(W+2.0, S-1.6, 0.9);
+      fixture(cx, r.h-0.14, cz-3.0, 0); fixture(cx, r.h-0.14, cz+2.0, 0);
+      break;
+    }
+    case 'showers':{
+      // both end walls carry a doorway, so the stalls hug the corners
+      [-4.1,-2.55, 2.55, 4.1].forEach(dx=>{
+        if(Math.abs(dx)<hw-0.9) showerStall(cx+dx, N+1.2, 0);
+      });
+      [-3.6, 3.6].forEach(dx=>{
+        if(Math.abs(dx)<hw-0.9) showerStall(cx+dx, S-1.2, Math.PI);
+      });
+      const drain=new THREE.Mesh(new THREE.CircleGeometry(0.22,10), MATS.darker);
+      drain.rotation.x=-Math.PI/2; drain.position.set(cx,0.011,cz); B.add(drain);
+      B.spot(cx, 0.14, cz);
+      fixture(cx, r.h-0.14, cz, Math.PI/2);
+      break;
+    }
+    case 'bathroom': case 'bathroom2':{
+      const n = r.type==='bathroom'?3:2;
+      for(let i=0;i<n;i++) toiletStall(W+1.0+i*1.35, N+1.4, 0);
+      for(let i=0;i<2;i++) toiletStall(E-1.0-i*1.35, N+1.4, 0);
+      sinkRow(cx-3.0, S-0.9, Math.PI, 3);
+      mirrorPanel(cx-3.0, 1.55, S-0.42, Math.PI, 2.6, 1.15);
+      mirrorPanel(cx+3.4, 1.55, S-0.42, Math.PI, 2.0, 1.15);
+      // urinals live on the far half of the west wall, clear of the stall exits
+      for(let i=0;i<3;i++) B.box(0.4,0.55,0.3, ps1({color:0xd2d6d0}), W+0.4, 1.05, S-1.4-i*1.1);
+      B.collide(W+0.4, S-2.5, 0.8, 3.6);
+      trashCan(E-0.9, cz+0.4);
+      fixture(cx, r.h-0.14, cz-1.5, Math.PI/2);
+      fixture(cx, r.h-0.14, cz+1.5, Math.PI/2);
+      break;
+    }
+    case 'gym':{
+      for(let i=0;i<4;i++) treadmill(W+1.6+i*1.7, N+1.6, 0);
+      weightRack(cx-hw+2.5, S-2.0, 0);
+      weightRack(cx+hw-2.5, S-2.0, 0);
+      ballRack(E-2.0, N+2.0, -0.4);
+      ballRack(E-4.2, N+2.0, -0.4);
+      hoop(E-1.2, cz, -Math.PI/2, 0.9);
+      const paint=new THREE.Mesh(new THREE.RingGeometry(1.6,1.75,20),
+        new THREE.MeshBasicMaterial({color:0xd8d2c0, side:THREE.DoubleSide}));
+      paint.rotation.x=-Math.PI/2; paint.position.set(cx,0.013,cz); B.add(paint);
+      for(let i=0;i<3;i++) crate(W+1.2, S-1.2-i*1.0, 0.7);
+      makeHideSpot(W+2.6, S-1.2, 'EQUIPMENT NOOK');
+      makeHideSpot(E-1.4, S-3.4, 'EQUIPMENT NOOK');
+      fixture(cx-3, r.h-0.14, cz-2, 0); fixture(cx+3, r.h-0.14, cz+2, 0);
+      break;
+    }
+    case 'gym2':{
+      shelfRack(W+1.2, cz-1.5, Math.PI/2, 3.0);
+      shelfRack(W+1.2, cz+1.5, Math.PI/2, 3.0);
+      ballRack(E-1.6, cz, -Math.PI/2);
+      for(let i=0;i<4;i++) crate(cx+rnd(-2.4,2.4), cz+rnd(-1.6,1.6), rnd(0.6,0.95));
+      makeHideSpot(W+2.6, cz, 'STORAGE GAP');
+      fixture(cx, r.h-0.14, cz, 0);
+      break;
+    }
+    case 'medical':{
+      medBed(W+2.2, N+2.6, 0);
+      medBed(W+2.2, S-2.6, 0);
+      medBed(E-2.2, N+2.6, 0);
+      monitorStand(W+3.8, N+2.6, -0.6, ' HR  ---\n BP  --/--\n\n NO PATIENT');
+      monitorStand(E-3.8, N+2.6, 0.6,  ' HR  ---\n BP  --/--\n\n NO PATIENT');
+      cabinet(cx-2.8, N+0.5, 0);
+      cabinet(cx+2.8, N+0.5, 0);
+      const curtain=new THREE.Mesh(new THREE.BoxGeometry(0.06,2.2,3.0), ps1({color:0x6f8c8a}));
+      curtain.position.set(E-3.0, 1.1, S-2.6); B.add(curtain);
+      B.collide(E-3.0, S-2.6, 0.6, 3.0);
+      makeHideSpot(E-3.9, S-2.6, 'CURTAIN', V3(E-3.9,0,S-0.9));
+      fixture(cx, r.h-0.14, cz-2, Math.PI/2); fixture(cx, r.h-0.14, cz+2, Math.PI/2);
+      break;
+    }
+    case 'medical2':{
+      B.box(2.4,0.9,0.8, ps1({color:0x8d8a80}), cx-2.8, 0.45, N+1.2);
+      B.collide(cx-2.8, N+1.2, 3.0, 1.6); B.spot(cx-2.8, 1.05, N+1.2);
+      monitorStand(cx-3.9, N+1.9, 0, ' CAM 14\n\n [        ]\n SIGNAL LOST');
+      cabinet(W+1.0, cz, Math.PI/2);
+      medBed(E-2.0, cz+1.5, Math.PI/2);
+      makeHideSpot(W+1.9, cz+2.4, 'SUPPLY NOOK');
+      fixture(cx, r.h-0.14, cz, 0);
+      break;
+    }
+    case 'concourse': case 'concourse2':{
+      const stands = r.type==='concourse'? [-9.5,-4.5,6.0] : [-6.5,5.5];
+      stands.forEach((dx,i)=>{
+        concession(cx+dx, N+1.2, 0, '  SECTION '+(108+i)+'\n\n  CLOSED');
+        makeHideSpot(cx+dx, N+2.9, 'STAND', V3(cx+dx,0,N+4.6));
+      });
+      for(let i=0;i<Math.floor(r.w/6);i++){
+        const px=W+3+i*6;
+        if(Math.abs(px-cx)<2.2) continue;
+        B.box(0.8,r.h,0.8, MATS.wall2, px, r.h/2, S-2.2);
+        B.collide(px, S-2.2, 1.3,1.3);
+      }
+      // vomitories opening onto the seating bowl (kept shallower than the
+      // connecting corridor so the annex never intrudes on the next room)
+      [-r.w/4, r.w/4].forEach(px=>bowlAnnex(cx+px, S+0.15, 7, 6.4, 5, true));
+      trashCan(W+2, S-1.2); trashCan(E-2, S-1.2);
+      for(let i=0;i<3;i++) fixture(W+5+i*7, r.h-0.14, cz, 0);
+      break;
+    }
+    case 'suite':{
+      sofa(cx-3.2, cz-0.6, 0.2);
+      sofa(cx+3.2, cz-0.6, -0.2);
+      B.box(2.6,1.05,0.7, ps1({color:0x4a3a2c}), cx-3.8, 0.52, N+1.0);
+      B.collide(cx-3.8, N+1.0, 3.2,1.4); B.spot(cx-3.8,1.2,N+1.0);
+      makeHideSpot(cx-3.8, N+2.5, 'BAR', V3(cx-3.8,0,N+4.1));
+      makeHideSpot(cx+3.2, cz-2.1, 'DRAPES', V3(cx+3.2,0,cz-0.6));
+      tvPanel(W+0.35, 1.7, cz, Math.PI/2);
+      tvPanel(E-0.35, 1.7, cz, -Math.PI/2);
+      // suite windows onto the bowl: real openings in the wall, sealed with glass
+      [-4.0, 4.0].forEach(px=>{
+        const glassW=new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.05), MATS.glass);
+        glassW.position.set(cx+px, 1.08, S-0.16); glassW.rotation.y=Math.PI; B.add(glassW);
+        B.collide(cx+px, S-0.1, 4.4, 0.5);
+        bowlAnnex(cx+px, S+0.15, 4.4, 6.4, 5, false);
+      });
+      [-5.5,-3.5,3.5,5.5].forEach(dx=>{   // bar stools, kept clear of the doorway
+        B.box(0.4,0.9,0.4, MATS.plastic, cx+dx, 0.45, S-1.3);
+        B.collide(cx+dx, S-1.3, 0.9,0.9); B.spot(cx+dx,1.05,S-1.3);
+      });
+      fixture(cx, r.h-0.14, cz, 0);
+      break;
+    }
+  }
+}
+
+/* Would a prop of this radius foul one of the room's doorways?
+   A doorway leaves a walkable channel about (gap/2 - playerRadius) wide, and the
+   player needs room to line up with it, so the prop has to clear the channel
+   laterally AND stay out of the approach depth in front of the wall. */
+function blocksDoorway(r,x,z,rad){
+  const hw=r.w/2, hd=r.d/2, band=1.2+rad, deep=2.0+rad;
+  if(r.open.n && Math.abs(x-r.x)<band && z<r.z-hd+deep) return true;
+  if(r.open.s && Math.abs(x-r.x)<band && z>r.z+hd-deep) return true;
+  if(r.open.w && Math.abs(z-r.z)<band && x<r.x-hw+deep) return true;
+  if(r.open.e && Math.abs(z-r.z)<band && x>r.x+hw-deep) return true;
+  return false;
+}
+// find somewhere inside the room for a prop that keeps every doorway usable
+function propSpot(r,rad){
+  for(let i=0;i<14;i++){
+    const x=r.x+rnd(-r.w/2+rad+0.4, r.w/2-rad-0.4);
+    const z=r.z+rnd(-r.d/2+rad+0.4, r.d/2-rad-0.4);
+    if(!blocksDoorway(r,x,z,rad) && !collides(x,z,rad)) return {x:x,z:z};
+  }
+  return null;
+}
+
+/* ---- maze level ---- */
+function buildMaze(cfg){
+  const N=5, CS=6.0;
+  const cells=[]; for(let i=0;i<N*N;i++) cells.push({n:false,s:false,e:false,w:false,v:false});
+  const idx=(x,y)=>y*N+x;
+  const stack=[[0,0]]; cells[0].v=true;
+  while(stack.length){
+    const [cx,cy]=stack[stack.length-1];
+    // grid row y sits at world z = -y*CS, so "north" (-Z) is y+1
+    const opts=[];
+    if(cy<N-1 && !cells[idx(cx,cy+1)].v) opts.push('n');
+    if(cy>0   && !cells[idx(cx,cy-1)].v) opts.push('s');
+    if(cx>0   && !cells[idx(cx-1,cy)].v) opts.push('w');
+    if(cx<N-1 && !cells[idx(cx+1,cy)].v) opts.push('e');
+    if(!opts.length){ stack.pop(); continue; }
+    const d=pick(opts); const c=cells[idx(cx,cy)];
+    let nx=cx, ny=cy;
+    if(d==='n'){ c.n=true; ny++; cells[idx(nx,ny)].s=true; }
+    if(d==='s'){ c.s=true; ny--; cells[idx(nx,ny)].n=true; }
+    if(d==='w'){ c.w=true; nx--; cells[idx(nx,ny)].e=true; }
+    if(d==='e'){ c.e=true; nx++; cells[idx(nx,ny)].w=true; }
+    cells[idx(nx,ny)].v=true; stack.push([nx,ny]);
+  }
+  // extra loops so it feels open and confusing
+  for(let i=0;i<6;i++){
+    const x=rint(0,N-2), y=rint(0,N-1);
+    cells[idx(x,y)].e=true; cells[idx(x+1,y)].w=true;
+  }
+  // James's locker goes in a dead end, off the route to the exit — it should
+  // feel like something you found rather than something you were shown.
+  let jamesAt=null, bestScore=-1;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    if((x===0&&y===0)||(x===N-1&&y===N-1)) continue;
+    const c=cells[idx(x,y)];
+    const exits=(c.n?1:0)+(c.s?1:0)+(c.e?1:0)+(c.w?1:0);
+    if(exits!==1) continue;
+    const score=x+y+Math.random();          // prefer the far end of the run
+    if(score>bestScore){ bestScore=score; jamesAt=[x,y]; }
+  }
+  if(!jamesAt) jamesAt=[N-1,0];             // the loops ate every dead end
+
+  const ox=-(N-1)*CS/2;
+  const mazeRooms=[];
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const c=cells[idx(x,y)];
+    const r={x:ox+x*CS, z:-y*CS, w:CS, d:CS, h:2.9, type:'maze', open:{}};
+    if(c.n) r.open.n=[{at:0,w:2.2}];
+    if(c.s) r.open.s=[{at:0,w:2.2}];
+    if(c.w) r.open.w=[{at:0,w:2.2}];
+    if(c.e) r.open.e=[{at:0,w:2.2}];
+    buildRoom(r, MATS.wall);
+    if(Math.random()<0.35) pipes(r.x, r.z, 2.55, CS*0.9, Math.random()<0.5?0:Math.PI/2);
+    if(Math.random()<0.5) fixture(r.x, 2.76, r.z, Math.random()<0.5?0:Math.PI/2);
+    // The entrance and exit cells stay bare so the door is always approachable,
+    // and every other cell gets at most ONE solid prop — two of them can line up
+    // into a wall and seal off a branch of the maze.
+    const isJames = (x===jamesAt[0] && y===jamesAt[1]);
+    const reserved = (x===0&&y===0) || (x===N-1&&y===N-1);
+    if(isJames){
+      const p=propSpot(r,0.8);
+      if(p) jamesLocker(p.x, p.z, rnd(0,6.28));
+    }else if(!reserved){
+      const roll=Math.random();
+      if(roll<0.34){ const p=propSpot(r,0.75); if(p) crate(p.x,p.z,rnd(0.6,0.95)); }
+      else if(roll<0.62){ const p=propSpot(r,1.3); if(p) shelfRack(p.x,p.z,(Math.random()<0.5?0:Math.PI/2),1.8); }
+      if(Math.random()<0.3){ const p=propSpot(r,0.6); if(p) makeHideSpot(p.x,p.z,'ALCOVE'); }
+    }
+    if((x+y)>2) for(let k=0;k<2;k++) B.spot(r.x+rnd(-2,2), 0.14, r.z+rnd(-2,2));
+    if(!reserved && !isJames) mazeRooms.push(r);
+  }
+  // the chosen dead end may have had no legal spot; the locker is not optional
+  for(let i=mazeRooms.length-1; i>=0 && !world.jamesLocker; i--){
+    const p=propSpot(mazeRooms[i],0.8);
+    if(p) jamesLocker(p.x, p.z, rnd(0,6.28));
+  }
+  return {exit:V3(ox+(N-1)*CS, 0, -(N-1)*CS), start:V3(ox, 0, 0)};
+}
+
+/* ---- arena level ---- */
+function buildArena(cfg){
+  const W=32, D=22, H=15;
+  const r={x:0,z:-D/2-4,w:W,d:D,h:H,type:'arena',open:{}};
+  // floor is the court
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(W,D), MATS.court);
+  floor.rotation.x=-Math.PI/2; floor.position.set(r.x,0,r.z); floor.receiveShadow=true;
+  B.add(floor); world.walkables.push(floor);
+  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(W,D), MATS.darker);
+  ceil.rotation.x=Math.PI/2; ceil.position.set(r.x,H,r.z); B.add(ceil);
+  const conv=(l,c)=>(l||[]).map(o=>({center:c+o.at,w:o.w}));
+  buildWallRun('x', r.z-D/2, r.x-W/2, r.x+W/2, 0, H, [], MATS.darker, +1);
+  buildWallRun('x', r.z+D/2, r.x-W/2, r.x+W/2, 0, H, [], MATS.darker, -1);
+  buildWallRun('z', r.x-W/2, r.z-D/2, r.z+D/2, 0, H, [], MATS.darker, +1);
+  buildWallRun('z', r.x+W/2, r.z-D/2, r.z+D/2, 0, H, [], MATS.darker, -1);
+  world.rooms.push(r);
+
+  hoop(r.x, r.z-D/2+1.6, 0, 1.15);
+  hoop(r.x, r.z+D/2-1.6, Math.PI, 1.15);
+  const bowl=seatBowl(r.x, r.z, W-3, D-3, 7, 0.62);
+  // scoreboard
+  const sb=new THREE.Group();
+  const cube=new THREE.Mesh(new THREE.BoxGeometry(4.4,2.6,4.4), MATS.darker);
+  sb.add(cube);
+  for(const s of[[0,0,2.24,0],[0,0,-2.24,Math.PI],[2.24,0,0,Math.PI/2],[-2.24,0,0,-Math.PI/2]]){
+    const scr=new THREE.Mesh(new THREE.PlaneGeometry(3.8,2.0),
+      new THREE.MeshBasicMaterial({map:TEX.screen('  HOME 00  00 AWAY\n\n   0:00.0\n\n   FINAL?','#e0742a')}));
+    scr.position.set(s[0],0,s[2]); scr.rotation.y=s[3]; sb.add(scr); scr.visible=false;
+    world.anims.push({type:'monitor', data:{mesh:scr}});
+  }
+  sb.position.set(r.x, 9.5, r.z); B.add(sb);
+  world.arena = {room:r, board:sb, bowl:bowl};
+  return r;
+}
+
+/* ==========================================================================
+   LEVEL LOADING
+   ========================================================================== */
+const state = {
+  levelIndex:0, collected:{}, ballsHere:0, needHere:0,
+  inventory:[], lore:[], battery:1.0, flashOn:true,
+  deaths:0, dread:0, started:false, paused:false, hiding:false,
+  ending:null, startTime:Date.now(), elapsed:0, seenIntro:false,
+  ritual:0, finale:0, gameOver:false,
+  fragments:[], photos:[], jamesOpened:false
+};
+
+/* Taken the moment a level is entered and restored on a restart, so a death
+   costs the whole section rather than dropping the player at a checkpoint. */
+let levelEntry = null;
+function snapshotProgress(){
+  return {
+    levelIndex: state.levelIndex,
+    collected: Object.assign({}, state.collected),
+    inventory: state.inventory.map(it=>Object.assign({}, it)),
+    lore: state.lore.slice(),
+    fragments: state.fragments.slice(),
+    photos: state.photos.slice(),
+    jamesOpened: state.jamesOpened,
+    battery: state.battery,
+    flashOn: state.flashOn,
+    dread: state.dread,
+    elapsed: state.elapsed,
+    deaths: state.deaths
+  };
+}
+function restoreProgress(s){
+  if(!s) return;
+  state.levelIndex = s.levelIndex;
+  state.collected  = Object.assign({}, s.collected);
+  state.inventory  = s.inventory.map(it=>Object.assign({}, it));
+  state.lore       = s.lore.slice();
+  state.fragments  = (s.fragments||[]).slice();
+  state.photos     = (s.photos||[]).slice();
+  state.jamesOpened= !!s.jamesOpened;
+  state.battery    = s.battery;
+  state.flashOn    = s.flashOn;
+  state.dread      = s.dread;
+  state.elapsed    = s.elapsed;
+}
+
+const player = {
+  pos:new THREE.Vector3(0,CFG.eye,0), yaw:0, pitch:0,
+  target:null, pendingInteract:null, bob:0, moving:false, stepT:0,
+  hideRec:null, frozen:false
+};
+
+let currentLevel=null;
+
+function loadLevel(i, isRestart){
+  const cfg = LEVELS[i];
+  state.levelIndex=i; currentLevel=cfg;
+  if(!isRestart) levelEntry = snapshotProgress();
+  clearWorld();
+  buildMaterials(cfg);
+  scene.fog.density = cfg.fog;
+  scene.fog.color.setHex(0x05060a);
+  JITTER.value = 260 - cfg.tier*22;
+
+  let startPos=V3(0,0,-2), exitPos=null, exitRot=0;
+
+  if(cfg.maze){
+    const mz = buildMaze(cfg);
+    startPos = mz.start.clone().add(V3(0,0,-1));
+    exitPos = mz.exit.clone(); exitRot=0;
+    makeExitDoor(exitPos.x, exitPos.z-2.6, 0, cfg.doorLabel, i);
+  }else if(cfg.arena){
+    const r = buildArena(cfg);
+    startPos = V3(0,0,r.z + r.d/2 - 1.6);
+    buildFinale(r);
+  }else{
+    const rooms = chainLayout(cfg.rooms);
+    // rooms that look out into the seating bowl need holes cut in their south wall.
+    // these are appended so the corridor doorway at at:0 survives.
+    rooms.forEach(rm=>{
+      if(rm.type==='concourse'||rm.type==='concourse2'){
+        rm.open.s=(rm.open.s||[]).concat([{at:-rm.w/4,w:3.0},{at:rm.w/4,w:3.0}]);
+      }else if(rm.type==='suite'){
+        rm.open.s=(rm.open.s||[]).concat([{at:-4.0,w:4.0},{at:4.0,w:4.0}]);
+      }
+    });
+    rooms.forEach(rm=>{
+      buildRoom(rm, (rm.type==='showers'||rm.type.indexOf('bathroom')===0||rm.type.indexOf('medical')===0)?MATS.wall2:MATS.wall);
+    });
+    rooms.forEach((rm,ix)=>dressRoom(rm, cfg, ix===rooms.length-1));
+    const first=rooms[0], last=rooms[rooms.length-1];
+    startPos = V3(first.x, 0, first.z + first.d/2 - 1.8);
+    makeExitDoor(last.x, last.z - last.d/2 + 0.35, 0, cfg.doorLabel, i);
+    world.rooms = rooms;
+  }
+
+  /* ---- populate collectibles ---- */
+  const already = state.collected[cfg.id]||0;
+  state.needHere = cfg.balls;
+  state.ballsHere = already;
+  if(!cfg.arena){
+    const toSpawn = cfg.balls - already;
+    const spots = pickSpots(toSpawn);
+    spots.forEach(p=>spawnBall(p));
+    // key item
+    if(cfg.key && !hasItem(cfg.key.id)){
+      const kp = pickSpots(1)[0];
+      spawnItem(kp, {kind:'key', id:cfg.key.id, label:cfg.key.label, desc:cfg.key.desc,
+                     color:cfg.key.id==='k_fuse'?0xd8c8a0:0xc9a13a});
+    }
+    // batteries
+    const bats = pickSpots(rint(2,3));
+    bats.forEach(p=>spawnItem(p,{kind:'battery', id:'battery', label:'BATTERY', desc:'A D-cell. Cold and heavy.'}));
+    // lore note
+    if(cfg.note && state.lore.indexOf(cfg.note)<0){
+      const np=pickSpots(1)[0];
+      const nd = NOTES.find(n=>n.id===cfg.note);
+      spawnItem(np,{kind:'note', id:nd.id, label:'DOCUMENT', title:nd.title, text:nd.text});
+    }
+    // fuse box puzzle
+    if(cfg.fuse){
+      const rr = world.rooms[world.rooms.length-1];
+      const fb = fuseBox(rr.x-rr.w/2+0.25, 1.5, rr.z, Math.PI/2);
+      B.interact(fb.door,{type:'fuse',label:'FUSE BOX',data:fb,range:2.6});
+      world.fuseBox=fb; world.powerOn=false;
+    }
+    // testimony about James — scraps left where people left them
+    FRAGMENTS.filter(f=>f.lv===cfg.id && state.fragments.indexOf(f.id)<0).forEach(f=>{
+      const fp=pickSpots(1)[0];
+      spawnItem(fp,{kind:'frag', id:f.id, label:'SCRAP OF PAPER',
+                    title:f.voice, text:f.text, fkind:f.kind});
+    });
+    // copies of the team photograph — on a wall if there is one clear, otherwise
+    // face-down on the floor like everything else in this building
+    PHOTO_PLACEMENTS.filter(p=>p.lv===cfg.id).forEach(p=>{
+      const w=photoWall();
+      if(w){ world.photos.push(teamPhotoBoard(w.x, 1.62, w.z, w.rot, p.v)); return; }
+      const fp=pickSpots(1)[0];
+      world.photos.push(teamPhotoBoard(fp.x, Math.max(fp.y,0.04), fp.z, rnd(0,6.28), p.v));
+    });
+  }
+
+  /* ---- final validation: drop hiding places that later geometry sealed off ---- */
+  for(let i=world.hideSpots.length-1;i>=0;i--){
+    const h=world.hideSpots[i];
+    if(collides(h.pos.x, h.pos.z, 0.45)){
+      removeInteractable(h.mesh);
+      world.hideSpots.splice(i,1);
+    }
+  }
+
+  /* ---- player placement ---- */
+  // the level always extends toward -Z, so yaw 0 faces into it
+  const sp = freeSpotNear(startPos.x, startPos.z);
+  player.pos.set(sp.x, CFG.eye, sp.z);
+  player.target=null; player.pendingInteract=null; player.yaw=0; player.pitch=0;
+  Collector.reset();
+  Scares.reset(cfg);
+
+  if(Audio.ready) Audio.setAmbient(cfg.drone, clamp(cfg.tier/4,0,1));
+  UI.levelBanner(cfg);
+  UI.updateHUD();
+}
+
+function pickSpots(n){
+  const out=[];
+  const spots = world.ballSpots.slice();
+  for(let i=spots.length-1;i>0;i--){ const j=rint(0,i); const t=spots[i]; spots[i]=spots[j]; spots[j]=t; }
+  while(out.length<n){
+    if(!spots.length){ out.push(randomFloorPoint()); continue; }
+    const p=spots.pop();
+    // floor-level spots must not be buried inside a prop
+    if(p.y<0.4 && collides(p.x,p.z,0.3)) continue;
+    out.push(p);
+  }
+  world.ballSpots = spots;
+  return out;
+}
+/* A clear stretch of wall to hang a copy of the photograph on: not across a
+   doorway, with somewhere to stand in front of it, and not on top of another
+   copy. Returns null rather than forcing a bad placement. */
+function photoWall(){
+  const placed=world.photos.map(p=>p.position);
+  for(let tries=0;tries<60;tries++){
+    const r=pick(world.rooms);
+    if(!r) break;
+    const hw=r.w/2, hd=r.d/2, inset=0.2;
+    if(hw<2.0 || hd<2.0) continue;
+    const side=rint(0,3);
+    let x,z,rot;
+    if(side===0){      x=r.x+rnd(-hw+1.3,hw-1.3); z=r.z-hd+inset; rot=0; }
+    else if(side===1){ x=r.x+rnd(-hw+1.3,hw-1.3); z=r.z+hd-inset; rot=Math.PI; }
+    else if(side===2){ x=r.x-hw+inset; z=r.z+rnd(-hd+1.3,hd-1.3); rot=Math.PI/2; }
+    else {             x=r.x+hw-inset; z=r.z+rnd(-hd+1.3,hd-1.3); rot=-Math.PI/2; }
+    if(blocksDoorway(r,x,z,0.5)) continue;
+    const fx=x+Math.sin(rot)*1.0, fz=z+Math.cos(rot)*1.0;
+    if(collides(fx,fz,CFG.radius)) continue;
+    if(placed.some(p=>Math.hypot(p.x-x,p.z-z)<2.5)) continue;
+    return {x:x, z:z, rot:rot};
+  }
+  return null;
+}
+
+function randomFloorPoint(){
+  for(let tries=0;tries<80;tries++){
+    const r=pick(world.rooms);
+    const x=r.x+rnd(-r.w/2+1.0, r.w/2-1.0);
+    const z=r.z+rnd(-r.d/2+1.0, r.d/2-1.0);
+    if(!collides(x,z,0.55)) return V3(x,0.13,z);
+  }
+  const r=world.rooms[0];
+  return V3(r.x, 0.13, r.z);
+}
+
+/* ==========================================================================
+   6 — PLAYER MOVEMENT & COLLISION
+   ========================================================================== */
+// spiral outward until we find somewhere the player actually fits
+function freeSpotNear(x,z){
+  if(!collides(x,z)) return {x:x,z:z};
+  for(let r=0.5;r<10;r+=0.5){
+    for(let a=0;a<16;a++){
+      const ang=a/16*Math.PI*2;
+      const nx=x+Math.cos(ang)*r, nz=z+Math.sin(ang)*r;
+      if(!collides(nx,nz)) return {x:nx,z:nz};
+    }
+  }
+  return {x:x,z:z};
+}
+function collides(x,z,rad){
+  const r=rad===undefined?CFG.radius:rad;
+  for(let i=0;i<world.colliders.length;i++){
+    const c=world.colliders[i];
+    if(x> c.minX-r && x< c.maxX+r && z> c.minZ-r && z< c.maxZ+r) return true;
+  }
+  return false;
+}
+function movePlayer(dx,dz){
+  if(!collides(player.pos.x+dx, player.pos.z)) player.pos.x+=dx;
+  if(!collides(player.pos.x, player.pos.z+dz)) player.pos.z+=dz;
+}
+
+const keys={};
+window.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(!state.started || state.frozen) return;
+  if(e.code==='Escape'){ UI.togglePause(); }
+  if(e.code==='KeyI' || e.code==='Tab'){ e.preventDefault(); UI.toggleInv(); }
+  if(e.code==='KeyJ'){ UI.toggleDossier(); }
+  if(e.code==='KeyF'){ toggleFlash(); }
+  if(e.code==='KeyE' && state.hiding){ exitHide(); }
+});
+window.addEventListener('keyup',e=>{ keys[e.code]=false; });
+
+function toggleFlash(){
+  if(state.battery<=0){ Audio.fail(); UI.toast('BATTERY DEAD'); return; }
+  state.flashOn=!state.flashOn;
+  Audio.ui(state.flashOn?'ok':'bad');
+  UI.toast(state.flashOn?'LIGHT ON':'LIGHT OFF');
+}
+
+/* --- mouse / pointer --- */
+const mouse = new THREE.Vector2();
+let dragging=false, dragged=false, downX=0, downY=0, downT=0;
+const dom = renderer.domElement;
+
+dom.addEventListener('pointerdown', e=>{
+  if(!state.started || state.paused || state.frozen) return;
+  dragging=true; dragged=false; downX=e.clientX; downY=e.clientY; downT=performance.now();
+  dom.setPointerCapture(e.pointerId);
+});
+dom.addEventListener('pointermove', e=>{
+  mouse.x = (e.clientX/window.innerWidth)*2-1;
+  mouse.y = -(e.clientY/window.innerHeight)*2+1;
+  UI.cursorAt(e.clientX,e.clientY);
+  if(dragging && state.started && !state.paused && !state.frozen){
+    const dx=e.clientX-downX, dy=e.clientY-downY;
+    if(Math.abs(dx)+Math.abs(dy)>6) dragged=true;
+    if(dragged && !state.hiding){
+      player.yaw   -= e.movementX!==undefined? e.movementX*CFG.turnSpeed : dx*CFG.turnSpeed;
+      player.pitch -= e.movementY!==undefined? e.movementY*CFG.turnSpeed : dy*CFG.turnSpeed;
+      player.pitch = clamp(player.pitch, -1.15, 1.15);
+    }else if(dragged && state.hiding){
+      player.yaw -= (e.movementX||0)*CFG.turnSpeed*0.6;
+    }
+  }
+});
+dom.addEventListener('pointerup', e=>{
+  if(dragging && !dragged && state.started && !state.paused && !state.frozen) handleClick();
+  dragging=false;
+});
+window.addEventListener('contextmenu', e=>e.preventDefault());
+
+function handleClick(){
+  if(state.frozen) return;
+  raycaster.setFromCamera(mouse, camera);
+  // interactables first
+  const hitsI = raycaster.intersectObjects(world.interactables, false);
+  if(hitsI.length){
+    const o=hitsI[0].object, I=o.userData.I;
+    const d=player.pos.distanceTo(o.getWorldPosition(new THREE.Vector3()));
+    if(d<=I.range){ interact(o); }
+    else{
+      // walk to it, then interact
+      const p=hitsI[0].point.clone(); p.y=0;
+      const dir=p.clone().sub(V3(player.pos.x,0,player.pos.z)).normalize();
+      const stop=p.clone().sub(dir.multiplyScalar(Math.min(I.range*0.6,1.4)));
+      player.target=stop; player.pendingInteract=o;
+    }
+    return;
+  }
+  if(state.hiding) return;
+  const hitsF = raycaster.intersectObjects(world.walkables, false);
+  if(hitsF.length){
+    const p=hitsF[0].point.clone(); p.y=0;
+    player.target=p; player.pendingInteract=null;
+    UI.pingAt(hitsF[0].point);
+  }
+}
+
+/* ==========================================================================
+   7 — INTERACTION
+   ========================================================================== */
+function removeInteractable(mesh){
+  const i=world.interactables.indexOf(mesh);
+  if(i>=0) world.interactables.splice(i,1);
+  if(mesh.parent) mesh.parent.remove(mesh);
+}
+
+function interact(o){
+  if(state.frozen) return;
+  const I=o.userData.I;
+  switch(I.type){
+    case 'ball': {
+      removeInteractable(o);
+      state.ballsHere++;
+      state.collected[currentLevel.id]=state.ballsHere;
+      Audio.pickup();
+      UI.updateHUD();
+      UI.toast('BASKETBALL  '+state.ballsHere+' / '+state.needHere);
+      state.dread=clamp(state.dread+0.02,0,1);
+      if(state.ballsHere>=state.needHere){
+        UI.caption('That should be all of them.');
+        Scares.fire('allCollected');
+      }else if(Math.random()<0.35){
+        Scares.fire('ballTaken');
+      }
+      break; }
+    case 'battery': {
+      removeInteractable(o);
+      state.battery=clamp(state.battery+0.34,0,1);
+      Audio.pickup(); UI.updateHUD(); UI.toast('BATTERY +34%');
+      break; }
+    case 'item': {
+      removeInteractable(o);
+      addItem(I.data);
+      Audio.pickup(); UI.toast('ACQUIRED: '+I.data.label);
+      break; }
+    case 'note': {
+      removeInteractable(o);
+      if(state.lore.indexOf(I.data.id)<0) state.lore.push(I.data.id);
+      addItem({kind:'note', id:I.data.id, label:'DOCUMENT', title:I.data.title,
+               text:I.data.text, desc:I.data.title});
+      Audio.pickup();
+      UI.showNote(I.data.title, I.data.text);
+      break; }
+    case 'frag': {
+      // testimony is filed in the dossier rather than the 12-slot inventory —
+      // there is far too much of it, and it is worth reading side by side
+      removeInteractable(o);
+      if(state.fragments.indexOf(I.data.id)<0) state.fragments.push(I.data.id);
+      Audio.pickup();
+      UI.showNote(I.data.title, I.data.text);
+      UI.toast('FILED — '+state.fragments.length+' ACCOUNTS  ·  J');
+      break; }
+    case 'photo': {
+      const d=I.data;
+      if(state.photos.indexOf(d.version)<0){ state.photos.push(d.version); Audio.pickup(); }
+      else Audio.ui();
+      UI.showPhoto(d.title, d.text, d.url);
+      break; }
+    case 'jlocker': {
+      openJamesLocker(I.data);
+      break; }
+    case 'james': {
+      removeInteractable(o);
+      if(state.fragments.indexOf(I.data.id)<0) state.fragments.push(I.data.id);
+      if(I.data.id==='j_final')
+        addItem({kind:'frag', id:I.data.id, label:'HIS OWN WORDS',
+                 title:I.data.voice, text:I.data.text, desc:I.data.voice});
+      Audio.pickup();
+      UI.showNote(I.data.voice, I.data.text);
+      if(I.data.id==='j_final'){
+        state.dread=clamp(state.dread+0.2,0,1);
+        Audio.heartbeat();
+        setTimeout(()=>UI.caption('Somewhere above you, a ball starts bouncing. Slowly. Like someone waiting.'), 800);
+      }
+      break; }
+    case 'door': {
+      tryExit(); break; }
+    case 'hide': {
+      enterHide(I.data); break; }
+    case 'fuse': {
+      if(world.powerOn){ UI.toast('POWER RESTORED'); break; }
+      if(hasItem('k_fuse')){
+        world.powerOn=true;
+        world.fuseBox.lamp.material.color.setHex(0x3ad86a);
+        Audio.buzz(null); Audio.ui('ok');
+        UI.toast('POWER RESTORED — DOOR UNLOCKED');
+        UI.caption('The lights come up for one second. Long enough to see it standing there.');
+        Scares.fire('powerOn');
+      }else{
+        Audio.fail(); UI.toast('THE FUSE SLOT IS EMPTY');
+      }
+      break; }
+    case 'mirror': {
+      Audio.ui();
+      const m=I.data;
+      if(!m.used && Math.random()<0.85){
+        m.used=true;
+        m.ghost.visible=true;
+        Audio.staticBurst(0.4,0.2);
+        UI.flash(0.35);
+        setTimeout(()=>{ m.ghost.visible=false; }, 420);
+        Audio.whisper(m.pos);
+        UI.caption('You are alone in the room. You are not alone in the glass.');
+        state.dread=clamp(state.dread+0.1,0,1);
+      }else{
+        UI.caption('Your reflection is a half second behind you.');
+      }
+      break; }
+    case 'marker': {
+      ritualPlace(I, o); break; }
+  }
+}
+
+function tryExit(){
+  const cfg=currentLevel;
+  if(cfg.fuse && !world.powerOn){
+    Audio.fail(); UI.toast('NO POWER TO THE DOOR'); return;
+  }
+  if(cfg.key && !hasItem(cfg.key.id)){
+    Audio.fail(); UI.toast('LOCKED — '+cfg.key.label+' REQUIRED'); return;
+  }
+  if(state.ballsHere<state.needHere){
+    UI.prompt('LEAVE THE SECTION?','COUNT IS '+state.ballsHere+' / '+state.needHere,
+      'You can still hear one bouncing somewhere behind you.\n\nThe work order says the count must match before you leave.',
+      ()=>advanceLevel(), ()=>{});
+  }else{
+    advanceLevel();
+  }
+}
+
+/* Opening it is the turn of the story: the door comes off, and the three
+   things nobody ever cleared out become readable. */
+function openJamesLocker(rec){
+  if(rec.opened) return;
+  rec.opened=true;
+  state.jamesOpened=true;
+  removeInteractable(rec.hit);
+  Audio.lockerSlam(rec.pos);
+  Audio.duck(0.22);                       // the room goes quiet for this one
+  setTimeout(()=>Audio.duck(0.62), 6000);
+  UI.shake(0.5);
+
+  // the door gives up entirely
+  const swing=setInterval(()=>{
+    rec.door.rotation.y -= 0.09;
+    if(rec.door.rotation.y < -1.5) clearInterval(swing);
+  }, 26);
+
+  const byId=id=>JAMES_LOCKER_ITEMS.find(i=>i.id===id);
+  [[rec.jersey,'j_jersey',3.0],[rec.trophy,'j_trophy',3.0],[rec.paper,'j_final',3.0]]
+    .forEach(([mesh,id,range])=>{
+      const d=byId(id);
+      if(!mesh || !d || state.fragments.indexOf(id)>=0) return;
+      B.interact(mesh,{type:'james', label:d.voice, data:d, range:range});
+    });
+
+  UI.caption('The door comes off in your hand. Nobody has opened this in a very long time.');
+  setTimeout(()=>Audio.whisper(rec.pos), 1600);
+}
+
+function advanceLevel(){
+  Audio.doorOpen(null);
+  UI.fade(true);
+  state.frozen=true;
+  setTimeout(()=>{
+    const nxt=state.levelIndex+1;
+    if(nxt>=LEVELS.length){ return; }
+    loadLevel(nxt);
+    state.frozen=false;
+    UI.fade(false);
+  }, 1200);
+}
+
+/* ---- hiding ---- */
+function enterHide(rec){
+  if(state.hiding) return;
+  state.hiding=true; player.hideRec=rec;
+  player.target=null;
+  player.pos.x=rec.pos.x; player.pos.z=rec.pos.z;
+  const look=rec.face.clone().sub(rec.pos);
+  player.yaw = Math.atan2(-look.x,-look.z);
+  $('hidebars').classList.add('on');
+  Audio.lockerSlam(rec.pos);
+  Audio.duck(0.35);
+  UI.toast('HIDING — [E] TO COME OUT');
+  Collector.onPlayerHide();
+}
+function exitHide(){
+  if(!state.hiding) return;
+  if(Collector.isNear(3.0)){ UI.toast('NOT YET'); Audio.fail(); return; }
+  state.hiding=false; player.hideRec=null;
+  $('hidebars').classList.remove('on');
+  Audio.duck(0.62);
+}
+
+/* ==========================================================================
+   8 — THE COLLECTOR
+   ========================================================================== */
+/* How the Collector detects you. Contact and the detection radius are instant;
+   being spotted across a lit room takes a moment, which is the window you get
+   to break line of sight or reach a hiding place. */
+const DETECT = { touch:1.15, radius:2.7, spotRange:10.0, spotTime:2.3 };
+
+const Collector = (function(){
+  let mesh=null, state_='off', timer=0, speed=0.9, targetPos=new THREE.Vector3();
+  let stalkTime=0, seenTimer=0, spotT=0, warned=false;
+
+  function ensure(){
+    if(!mesh){ mesh=collectorSilhouette(1.18); mesh.visible=false; scene.add(mesh); }
+    return mesh;
+  }
+  function reset(){
+    ensure(); mesh.visible=false; state_='off'; timer=rnd(18,40); stalkTime=0;
+    spotT=0; warned=false;
+    mesh.position.set(0,-99,0);
+  }
+  function farPoint(){
+    // a spot in a room the player isn't in, or the far end of the current room
+    const rooms=world.rooms.filter(r=>{
+      const dx=Math.abs(r.x-player.pos.x), dz=Math.abs(r.z-player.pos.z);
+      return dx<r.w/2+2 && dz<r.d/2+2;
+    });
+    let r = rooms.length? rooms[0] : pick(world.rooms);
+    const cands=[];
+    for(let i=0;i<24;i++){
+      const x=r.x+rnd(-r.w/2+0.9, r.w/2-0.9), z=r.z+rnd(-r.d/2+0.9, r.d/2-0.9);
+      if(collides(x,z,0.6)) continue;
+      const d=Math.hypot(x-player.pos.x, z-player.pos.z);
+      if(d>6) cands.push({x,z,d});
+    }
+    if(!cands.length) return null;
+    cands.sort((a,b)=>b.d-a.d);
+    return cands[0];
+  }
+  function appear(mode){
+    ensure();
+    const p=farPoint(); if(!p) return false;
+    mesh.position.set(p.x, 0, p.z);
+    mesh.visible=true;
+    mesh.lookAt(player.pos.x, 0, player.pos.z);
+    state_ = mode||'watch';
+    seenTimer=0;
+    if(mode==='stalk'){ stalkTime=rnd(16,26); Audio.bounceRun(mesh.position, 5); Audio.heartbeat(); }
+    else Audio.bounce(mesh.position, 0.75);
+    return true;
+  }
+  function inView(){
+    if(!mesh.visible) return false;
+    const v=mesh.position.clone().sub(player.pos); v.y=0;
+    const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); fwd.y=0; fwd.normalize();
+    return v.normalize().dot(fwd) > 0.55;
+  }
+  function isNear(d){ return mesh && mesh.visible && mesh.position.distanceTo(player.pos)<d; }
+  // walls break the stare: march the segment and stop at the first collider
+  function hasLineOfSight(){
+    const ax=mesh.position.x, az=mesh.position.z;
+    const bx=player.pos.x,   bz=player.pos.z;
+    const dist=Math.hypot(bx-ax,bz-az);
+    const steps=Math.ceil(dist/0.45);
+    for(let i=1;i<steps;i++){
+      const t=i/steps;
+      if(collides(ax+(bx-ax)*t, az+(bz-az)*t, 0.05)) return false;
+    }
+    return true;
+  }
+
+  function update(dt){
+    ensure();
+    const tier = currentLevel? currentLevel.tier : 0;
+    if(state_==='off'){
+      timer-=dt;
+      if(timer<=0){
+        const roll=Math.random();
+        const stalkChance = 0.06 + tier*0.14 + (state.battery<=0?0.25:0);
+        if(roll<stalkChance && !state.hiding) appear('stalk');
+        else appear('watch');
+        timer = rnd(24,55) - tier*3;
+      }
+      return;
+    }
+    // eyes pulse
+    const t=performance.now()*0.002;
+    mesh.userData.eyeMat.color.setRGB(1, 0.42+0.12*Math.sin(t*3), 0.08);
+
+    if(state_==='watch'){
+      mesh.lookAt(player.pos.x, mesh.position.y, player.pos.z);
+      // it is sizing you up: stay in the open and in its sightline and it takes you.
+      // the court is exempt — there is nowhere to hide down there, and the finale
+      // needs it standing at half court without killing anyone.
+      const canSpot = !state.finale && !(currentLevel && currentLevel.arena);
+      const dw=mesh.position.distanceTo(player.pos);
+      if(canSpot && !state.hiding && dw<DETECT.spotRange && hasLineOfSight()){
+        spotT += dt*(1+tier*0.35);
+        if(!warned && spotT>DETECT.spotTime*0.45){
+          warned=true;
+          Audio.heartbeat(); Audio.breath(mesh.position);
+          UI.caption('It has stopped moving. It is looking directly at you.');
+        }
+        if(spotT>=DETECT.spotTime){ caught(); return; }
+      }else{
+        spotT=Math.max(0, spotT-dt*1.6); warned=false;
+      }
+      // it only gets to pull the vanishing act before it has locked on
+      const canSlipAway = spotT < DETECT.spotTime*0.45;
+      if(inView()){
+        seenTimer+=dt;
+        state.dread=clamp(state.dread+dt*0.14,0,1);
+        if(canSlipAway && seenTimer>rnd(0.9,2.2)){
+          mesh.visible=false; state_='off'; spotT=0; warned=false;
+          Audio.staticBurst(0.3,0.13);
+          if(Math.random()<0.5) UI.caption(pick([
+            'It was standing there. Now the seat is empty.',
+            'Do not count out loud.',
+            'It knows how many you have.']));
+        }
+      }else{
+        seenTimer=0;
+        if(canSlipAway && Math.random()<dt*0.10){ mesh.visible=false; state_='off'; spotT=0; warned=false; }
+      }
+      if(Math.random()<dt*0.25) Audio.bounce(mesh.position, 0.5);
+      return;
+    }
+    if(state_==='stalk'){
+      stalkTime-=dt;
+      const spd = (0.72 + tier*0.14) * (state.hiding?0.5:1);
+      const dir=new THREE.Vector3(player.pos.x-mesh.position.x,0,player.pos.z-mesh.position.z);
+      const dist=dir.length();
+      dir.normalize();
+      const step=dir.multiplyScalar(spd*dt);
+      // crude collision so it doesn't walk into walls
+      if(!collides(mesh.position.x+step.x, mesh.position.z, 0.5)) mesh.position.x+=step.x;
+      if(!collides(mesh.position.x, mesh.position.z+step.z, 0.5)) mesh.position.z+=step.z;
+      mesh.lookAt(player.pos.x, mesh.position.y, player.pos.z);
+      // limb sway
+      mesh.userData.limbs.forEach((l,i)=>{ l.rotation.x = Math.sin(t*4 + i)*0.22; });
+
+      state.dread=clamp(state.dread+dt*0.10,0,1);
+      if(Math.random()<dt*0.9) Audio.bounce(mesh.position, clamp(1.4-dist*0.05,0.3,1));
+      if(dist<9 && Math.random()<dt*0.6) Audio.breath(mesh.position);
+      // flashlight failure when close
+      if(dist<8 && Math.random()<dt*0.5) Scares.flicker(0.9);
+
+      if(state.hiding){
+        // searches near the hide spot then leaves
+        if(dist<2.2){ stalkTime-=dt*2.4; }
+        if(stalkTime<=0){ leave(); }
+        return;
+      }
+      // contact, or simply letting it get inside the detection radius
+      if(dist<DETECT.touch || dist<DETECT.radius){ caught(); return; }
+      if(stalkTime<=0) leave();
+      return;
+    }
+  }
+  function leave(){
+    mesh.visible=false; state_='off'; timer=rnd(30,60);
+    Audio.staticBurst(0.5,0.1);
+    UI.caption('The bouncing stops. Somewhere far away, a door closes.');
+  }
+  function caught(){
+    if(state.gameOver || state.finale) return;
+    state_='off'; timer=rnd(40,70); spotT=0; warned=false;
+    onCaught();
+  }
+  function onPlayerHide(){
+    if(state_==='stalk') stalkTime=Math.min(stalkTime, 9);
+  }
+  function pos(){ return mesh? mesh.position : new THREE.Vector3(); }
+  function forceAppearAt(x,z,mode){
+    ensure(); mesh.position.set(x,0,z); mesh.visible=true; state_=mode||'watch'; seenTimer=0;
+    spotT=0; warned=false;
+    if(mode==='stalk') stalkTime=rnd(14,22);
+  }
+  function hide(){ if(mesh){mesh.visible=false; state_='off';} }
+  return {reset, update, isNear, pos, onPlayerHide, forceAppearAt, hide,
+          get mesh(){return ensure();}, get mode(){return state_;}};
+})();
+
+/* Detected. There is no recovery from this — the whole level goes back. */
+function onCaught(){
+  if(state.gameOver) return;
+  state.gameOver=true;
+  state.deaths++;
+
+  // 1 — controls die on the spot
+  state.frozen=true;
+  player.target=null; player.pendingInteract=null; player.moving=false;
+
+  // 2 — the horn
+  Audio.buzzer(2.1);
+  Audio.jumpscare();
+  Audio.stopAmbient();
+
+  // 3 + 4 — red flash and a hard camera shake
+  const rf=$('redflash');
+  rf.style.opacity=0.95;
+  setTimeout(()=>{ rf.style.opacity=0.35; }, 130);
+  setTimeout(()=>{ rf.style.opacity=0; }, 620);
+  UI.flash(0.7);
+  UI.shake(2.6);
+
+  // it lunges into the lens as the screen goes red
+  const m=Collector.mesh;
+  m.visible=true;
+  const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+  m.position.set(player.pos.x+fwd.x*1.1, 0, player.pos.z+fwd.z*1.1);
+  m.lookAt(player.pos.x, 0, player.pos.z);
+  setTimeout(()=>{ m.visible=false; }, 900);
+
+  if(state.hiding){ state.hiding=false; $('hidebars').classList.remove('on'); Audio.duck(0.62); }
+
+  // 5 — the overlay fades up once the scare has landed
+  setTimeout(()=>UI.showGameOver(), 1150);
+}
+
+/* Index 0 is the line that ships; the rest are the approved alternates, kept
+   here so the subtext can be swapped without digging through the markup. */
+const GAMEOVER_LINES = [
+  'You missed the game-winning shot.',
+  'Better luck next possession.',
+  'The clock hit zero.',
+  'That one bounced off the rim.',
+  'You came up short when it mattered.',
+  'No overtime this time.'
+];
+const GAMEOVER_SUB = GAMEOVER_LINES[0];
+
+/* Full level rewind — no checkpoints. Progression is rolled back to the
+   snapshot taken when the level was entered, then the level is rebuilt from
+   scratch, so balls, keys, notes, puzzles and props all return. */
+function restartLevel(){
+  const snap = levelEntry || snapshotProgress();
+  UI.hideGameOver();
+  state.gameOver=false;
+  state.paused=false;
+  state.hiding=false;
+  state.finale=0; state.ritual=0;
+  $('hidebars').classList.remove('on');
+  $('redflash').style.opacity=0;
+  player.hideRec=null;
+  Collector.reset(); Collector.hide();
+  world.powerOn=false;
+
+  restoreProgress(snap);
+  UI.fade(true);
+  state.frozen=true;
+  setTimeout(()=>{
+    loadLevel(snap.levelIndex, true);
+    UI.buildInv();
+    state.frozen=false;
+    UI.fade(false);
+    Audio.duck(0.62);
+    UI.caption('You clock back in at the top of the section. Nothing you found here counts yet.');
+  }, 700);
+}
+
+function toMainMenu(){
+  UI.hideGameOver();
+  state.gameOver=false; state.started=false; state.paused=false; state.frozen=false;
+  state.hiding=false;
+  $('hidebars').classList.remove('on');
+  $('redflash').style.opacity=0;
+  UI.fade(false);
+  Collector.hide();
+  Audio.stopAmbient();
+  $('title').classList.remove('hidden'); $('title').classList.add('on');
+}
+
+/* ==========================================================================
+   9 — SCARE MANAGER
+   ========================================================================== */
+const Scares = (function(){
+  let timer=6, tier=0, flickerT=0, flickerPow=0, shiftT=14;
+
+  function reset(cfg){ timer=rnd(8,16); tier=cfg.tier; flickerT=0; shiftT=rnd(18,30); }
+
+  function flicker(pow){ flickerT=rnd(0.5,1.4); flickerPow=pow||0.7; }
+
+  function offscreen(p){
+    const v=p.clone().sub(player.pos); v.y=0;
+    const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); fwd.y=0; fwd.normalize();
+    return v.normalize().dot(fwd) < 0.25;
+  }
+
+  const EARLY=['bounceFar','pa','lockerSlam','footsteps','flicker'];
+  const MID=['shadow','ballMove','monitor','whisper','shower','flicker','bounceFar','lockerSlam'];
+  const LATE=['shadow','geometry','lockerNums','stalk','whisper','monitor','crowd','flicker','ballMove'];
+
+  function fire(evt){
+    switch(evt){
+      case 'allCollected':
+        Audio.staticBurst(0.7,0.12);
+        setTimeout(()=>{ Audio.paAnnounce(); UI.caption('"...PLAYERS... TO THE FLOOR... PLAYERS TO THE FLOOR..."'); }, 900);
+        if(tier>=2) setTimeout(()=>run('shadow'), 2600);
+        break;
+      case 'ballTaken':
+        Audio.bounce(randomFar(), 0.8);
+        if(Math.random()<0.4) UI.caption('Something bounced. Twice. Then stopped.');
+        break;
+      case 'powerOn':
+        UI.flash(0.5);
+        world.flickerLights.forEach(f=>{ f.light.intensity=LIGHT.fixture; f.on=true; });
+        setTimeout(()=>{ world.flickerLights.forEach(f=>{ f.light.intensity=0; f.on=false; }); }, 1400);
+        break;
+      default: run(evt);
+    }
+  }
+  function randomFar(){
+    const r=pick(world.rooms);
+    return V3(r.x+rnd(-r.w/2,r.w/2), 0.2, r.z+rnd(-r.d/2,r.d/2));
+  }
+
+  function run(kind){
+    switch(kind){
+      case 'bounceFar': Audio.bounceRun(randomFar(), rint(4,8)); break;
+      case 'pa':
+        Audio.paAnnounce();
+        UI.caption(pick([
+          '"...ATTENDANCE TONIGHT... ONE..."',
+          '"...FINAL SCORE... FINAL SCORE... FINAL..."',
+          '"...WILL THE OWNER OF THE... PLEASE RETURN IT..."']));
+        break;
+      case 'lockerSlam': {
+        const banks=world.shiftables.filter(s=>s.type==='lockers');
+        if(!banks.length){ Audio.lockerSlam(randomFar()); break; }
+        const b=pick(banks).obj;
+        const d=pick(b.doors);
+        const wp=d.getWorldPosition(new THREE.Vector3());
+        d.rotation.y = -1.1;
+        d.position.x = d.userData.pivotX + 0.2;
+        d.position.z += 0.22;
+        Audio.doorOpen(wp);
+        setTimeout(()=>{
+          d.rotation.y=0; d.position.z-=0.22; d.position.x=d.userData.pivotX+(0.42-0.04)/2;
+          Audio.lockerSlam(wp); UI.shake(0.5);
+        }, rnd(1400,2600));
+        break; }
+      case 'footsteps': {
+        const p=player.pos.clone();
+        const back=new THREE.Vector3(0,0,1).applyQuaternion(camera.quaternion).multiplyScalar(3.2);
+        p.add(back);
+        let n=0;
+        const iv=setInterval(()=>{ Audio.footstep(1.4); if(++n>rint(3,6)) clearInterval(iv); }, 460);
+        setTimeout(()=>UI.caption('Footsteps. Behind you. They stop when you stop.'), 500);
+        break; }
+      case 'flicker': flicker(0.85); Audio.buzz(null); break;
+      case 'shadow': {
+        Collector.forceAppearAt(...(function(){
+          const p=randomFar(); return [p.x,p.z,'watch'];
+        })());
+        Audio.whisper(Collector.pos());
+        break; }
+      case 'ballMove': {
+        const balls=world.interactables.filter(o=>o.userData.I.type==='ball' && offscreen(o.position));
+        if(balls.length>=1){
+          const b=pick(balls);
+          const dest=randomFloorPoint();
+          b.position.copy(dest);
+          Audio.bounce(dest, 0.6);
+          if(Math.random()<0.5) UI.caption('It is not where you left it.');
+        }
+        break; }
+      case 'monitor': {
+        const mons=world.anims.filter(a=>a.type==='monitor');
+        if(mons.length){
+          const m=pick(mons).data.mesh;
+          m.visible=true; Audio.staticBurst(0.6,0.1);
+          setTimeout(()=>{ m.visible=false; }, rnd(2200,5200));
+          if(Math.random()<0.5) UI.caption('The screen shows this room. There is someone standing in it.');
+        }
+        break; }
+      case 'whisper': {
+        const p=randomFar(); Audio.whisper(p);
+        // once the player has been reading, the building starts repeating the
+        // rumours back at them — including the ones that cancel each other out
+        const lines=['"...you left one behind..."','"...count it again..."',
+          '"...the game is not over..."','"...stay for the second half..."'];
+        if(state.fragments.length>=4) lines.push(
+          '"...that isn\'t what happened..."','"...ask somebody else..."',
+          '"...he wasn\'t even on the court..."','"...we needed somebody to blame..."');
+        if(state.jamesOpened) lines.push(
+          '"...nobody noticed..."','"...you didn\'t know me either..."');
+        UI.caption(pick(lines));
+        break; }
+      case 'shower': {
+        const sh=world.anims.filter(a=>a.type==='shower');
+        if(sh.length){
+          const s=pick(sh).data; s.on=true; Audio.water(6.5);
+          UI.caption('Every shower head opens at once. The water is cold.');
+          setTimeout(()=>{ s.on=false; }, 6500);
+        }else Audio.water(4);
+        break; }
+      case 'crowd':
+        Audio.crowd(10, 0.18);
+        UI.caption('The stands are empty. The stands are cheering.');
+        break;
+      case 'lockerNums': {
+        const banks=world.shiftables.filter(s=>s.type==='lockers');
+        banks.forEach(b=>{
+          if(!offscreen(b.obj.group.position)) return;
+          const t=TEX.lockerNums(b.obj.seed,true);
+          b.obj.doors.forEach((d,i)=>{
+            d.material.map=t.clone(); d.material.map.repeat.set(1/b.obj.doors.length,1);
+            d.material.map.offset.set(i/b.obj.doors.length,0);
+            d.material.map.needsUpdate=true; d.material.needsUpdate=true;
+          });
+        });
+        UI.caption('The numbers are wrong. They were right a minute ago.');
+        break; }
+      case 'geometry': {
+        // stretch a corridor / push a wall while the player is not looking
+        const rs=world.rooms.filter(r=>r.type==='corridor'||r.type==='maze');
+        if(!rs.length) break;
+        JITTER.value = 90;
+        setTimeout(()=>{ JITTER.value = 260-tier*22; }, 2600);
+        UI.stretch(2.4);
+        UI.caption('The hallway is longer than it was.');
+        Audio.elevator();
+        break; }
+      case 'stalk':
+        Collector.forceAppearAt(...(function(){ const p=randomFar(); return [p.x,p.z,'stalk']; })());
+        Audio.heartbeat();
+        UI.caption('Something starts walking. It does not stop when you stop.');
+        break;
+    }
+  }
+
+  function update(dt){
+    if(state.frozen) return;
+    timer-=dt*(1+state.dread*0.6);
+    if(timer<=0){
+      const pool = tier<=0?EARLY : tier<=2?MID : LATE;
+      run(pick(pool));
+      timer = rnd(16,38) - tier*2.4;
+      state.dread=clamp(state.dread+0.035,0,1);
+    }
+    // flicker handling
+    if(flickerT>0){
+      flickerT-=dt;
+      const on = Math.random()> (0.35+flickerPow*0.4);
+      flashlight.intensity = on? LIGHT.flash*batteryFactor() : 0.09;
+      if(flickerT<=0) flashlight.intensity = LIGHT.flash*batteryFactor();
+    }
+    // late-game geometry breathing
+    if(tier>=3){
+      shiftT-=dt;
+      if(shiftT<=0){ shiftT=rnd(20,40); if(Math.random()<0.6) run('geometry'); }
+    }
+  }
+  return {reset, update, fire, flicker, run};
+})();
+
+function batteryFactor(){
+  if(!state.flashOn) return 0;
+  if(state.battery<=0) return 0;
+  return clamp(0.25+state.battery*0.85,0,1.1);
+}
+
+/* ==========================================================================
+   10 — INVENTORY / SAVE / ENDINGS
+   ========================================================================== */
+function hasItem(id){ return state.inventory.some(i=>i.id===id); }
+function addItem(it){
+  if(it.id==='battery'){ state.battery=clamp(state.battery+0.34,0,1); UI.updateHUD(); return; }
+  if(hasItem(it.id)) return;
+  state.inventory.push(it);
+  UI.buildInv();
+}
+
+const SAVE_KEY='afterthebuzzer_save_v1';
+function saveGame(){
+  const d={
+    v:2, level:state.levelIndex, collected:state.collected, ballsHere:state.ballsHere,
+    inv:state.inventory, lore:state.lore, battery:state.battery, deaths:state.deaths,
+    dread:state.dread, elapsed:state.elapsed,
+    frags:state.fragments, photos:state.photos, james:state.jamesOpened
+  };
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(d)); UI.toast('SHIFT LOG SAVED'); Audio.ui('ok'); }
+  catch(e){ UI.toast('SAVE FAILED'); }
+}
+function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
+function loadGame(){
+  try{
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!d) return false;
+    state.collected=d.collected||{}; state.inventory=d.inv||[]; state.lore=d.lore||[];
+    state.battery=d.battery!==undefined?d.battery:1; state.deaths=d.deaths||0;
+    state.dread=d.dread||0; state.elapsed=d.elapsed||0;
+    state.fragments=d.frags||[]; state.photos=d.photos||[]; state.jamesOpened=!!d.james;
+    startGame(d.level||0);
+    UI.toast('SHIFT LOG LOADED'); Audio.ui('ok');
+    return true;
+  }catch(e){ return false; }
+}
+
+function totalCollected(){
+  return LEVELS.reduce((a,l)=>a+(state.collected[l.id]||0),0);
+}
+
+/* ---- FINALE ---- */
+function buildFinale(r){
+  state.ritual=0; state.finale=0;
+  // three ritual markers in the center circle
+  const pts=[[0,-1.6],[1.5,0.9],[-1.5,0.9]];
+  pts.forEach((p,i)=>{
+    const g=new THREE.Mesh(new THREE.RingGeometry(0.28,0.42,14),
+      new THREE.MeshBasicMaterial({color:0xd2601c, side:THREE.DoubleSide, transparent:true, opacity:0.75}));
+    g.rotation.x=-Math.PI/2; g.position.set(r.x+p[0], 0.02, r.z+p[1]);
+    B.add(g);
+    B.interact(g,{type:'marker',label:'PLACE A BALL',data:{i:i, mesh:g, pos:g.position.clone()},range:2.4});
+  });
+  // the final basketball at center court
+  const fin=spawnBall(V3(r.x,0.13,r.z));
+  fin.userData.I.label='THE LAST BASKETBALL';
+  UI.caption('Center court. The last one is sitting exactly where it was left.');
+}
+function ritualPlace(I, o){
+  if(state.ballsHere<1){ Audio.fail(); UI.toast('YOU NEED THE BALL'); return; }
+  if(o.userData.placed){ Audio.fail(); return; }
+  o.userData.placed=true;
+  removeInteractable(o);
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.122,10,8), MATS.ball);
+  b.position.copy(I.data.pos); b.position.y=0.13; B.add(b);
+  o.material.color.setHex(0xffb050); o.material.opacity=1;
+  Audio.bounce(b.position,1); Audio.pickup();
+  state.ritual++;
+  UI.toast('OFFERING  '+state.ritual+' / 3');
+  if(state.ritual===1){ Audio.crowd(12,0.10); UI.caption('A single pair of hands starts clapping, high up in the dark.'); }
+  if(state.ritual===2){ Audio.crowd(14,0.20); UI.caption('The whole bowl is applauding now. Every seat is empty.'); }
+  if(state.ritual>=3) startFinalEncounter();
+}
+function startFinalEncounter(){
+  state.finale=1;
+  const r=world.arena.room;
+  Audio.crowd(20,0.34);
+  Audio.paAnnounce();
+  UI.caption('"...AND NOW... YOUR CROWN CENTER... COLLECTOR..."');
+  scene.fog.density=0.02;
+  world.anims.filter(a=>a.type==='monitor').forEach(a=>a.data.mesh.visible=true);
+  Collector.forceAppearAt(r.x, r.z-r.d/2+3.0, 'watch');
+  Collector.mesh.scale.setScalar(1.6);
+  UI.shake(2.0); UI.dreadFlash();
+  setTimeout(()=>{
+    UI.prompt('THE COLLECTOR WAITS AT HALF COURT',
+      'COUNT: '+totalCollected()+' / '+TOTAL_BALLS,
+      'It holds out a hand the length of a foul lane.\n\nGive back everything you found tonight — or turn around and walk to the tunnel while it is still letting you.',
+      ()=>resolveEnding(true), ()=>resolveEnding(false));
+  }, 6500);
+}
+/* What the player takes away about James, keyed on how much testimony they
+   actually dug up. None of these resolve it, and the fullest version resolves
+   it least — the more accounts you have, the less they agree. */
+function jamesEpilogue(){
+  const n=state.fragments.length;
+  if(n===0)
+    return '\n\n—\n\nThere was a name on one of the lockers down there. You never went looking for it, and nobody is going to tell you now.';
+  if(!state.jamesOpened && n<8)
+    return '\n\n—\n\nYou picked up enough paper tonight to learn that there was a boy called James, that he played here, and that something happened at a championship game in the winter of \'94.\n\nEverything past that, the building tells you three different ways.';
+  if(!state.jamesOpened)
+    return '\n\n—\n\nTwo dozen people wrote about James and not two of them describe the same person. He was the kindest one on that roster. He was frightening by the end. He lost them the game. He never left the bench.\n\nYou have every version except his. You know now that there was one, folded up somewhere in the building, and that you walked past it.';
+  return '\n\n—\n\nYou found his own words in the end, and they are the shortest thing in the whole file:\n\n     Some thought I cared too much.\n     Some thought I didn\'t care at all.\n     Maybe that\'s why nobody noticed\n     when I needed help.\n\nIt does not tell you what he did. It does not tell you what happened after the buzzer that never sounded, or whether the thing that watched you from the upper deck tonight was a boy, or twenty years of people needing somewhere to put the blame, or nothing at all.\n\nYou will decide that on the drive home, and you will decide it differently next week.';
+}
+
+function resolveEnding(gave){
+  const total=totalCollected();
+  const allBalls = total>=TOTAL_BALLS;
+  const allLore = state.lore.length>=NOTES.length && state.fragments.indexOf('j_final')>=0;
+  let ending;
+  if(!gave){
+    ending={key:'run', title:'ENDING — ABANDON POST',
+      sub:'YOU LEFT THE FLOOR',
+      body:'You walk up the tunnel with your arms full. The bouncing follows you the whole way and stops the instant you touch the exit bar.\n\nOutside, the city is still black. Your car is in the lot. The stadium doors close behind you without a sound.\n\nYou never work another night shift. But every arena you ever walk into, somewhere in the upper deck, one seat is filled.'};
+  }else if(allBalls && allLore){
+    ending={key:'secret', title:'ENDING — FINAL BUZZER',
+      sub:'SECRET · YOU READ EVERYTHING THEY LEFT',
+      body:'You set the last ball in its hands and say the only thing you have that nobody else said to him: his name.\n\nThe silhouette folds down and down until it is the size of a seventeen-year-old who stayed too late on a court the city paved over in 1994. He looks at the scoreboard. 0:00.\n\nA buzzer sounds — one long, flat, ugly note that shakes forty thousand empty seats.\n\nThen the house lights come up, every single one, and the arena is just an arena. On the floor where he stood there is a pair of worn sneakers, laces still tied, and a jersey with the name tape picked off.\n\nYou clock out at 5:58 AM. The count matches.\n\nWhat you cannot work out, later, is whether you sent something home or simply stopped a building from telling a story about a boy who was never there to correct it.'};
+  }else if(allBalls){
+    ending={key:'good', title:'ENDING — CLOCKED OUT',
+      sub:'GOOD · THE COUNT MATCHED',
+      body:'Every ball you carried tonight goes into its hands. It counts them. You hear it counting — a dry click for each one, like a scoreboard rolling over.\n\nAt the last one it stops. It steps back into the dark under the far basket and does not come out.\n\nThe service door opens on its own. The sky over the parking lot is going grey.\n\nYou make it out before sunrise. You do not come back for your last check.'};
+  }else{
+    ending={key:'bad', title:'ENDING — VARIANCE REPORT',
+      sub:'BAD · '+total+' OF '+TOTAL_BALLS,
+      body:'It counts what you brought. It counts again. It counts a third time, slower, so you can hear exactly where the number stops being right.\n\nThe tunnel you came from is a wall now. So is the one behind it.\n\nThe work order was very clear: if the count does not match, do not leave the building.\n\nSomewhere above you a light comes on over section 108, and the seats begin to fill, and the game starts over, and you go back down to the lockers to look again.'};
+  }
+  ending.body += jamesEpilogue();
+  state.ending=ending;
+  UI.showEnding(ending);
+}
+
+/* ==========================================================================
+   11 — UI
+   ========================================================================== */
+const UI = (function(){
+  let capT=0, toastT=0, shakeT=0, shakeP=0, stretchT=0, flashV=0;
+
+  function updateHUD(){
+    $('ballNum').textContent = state.ballsHere+' / '+state.needHere;
+    const p=Math.round(state.battery*100);
+    $('batPct').textContent = p+'%';
+    const f=$('batFill'); f.style.width=Math.max(0,p)+'%';
+    f.classList.toggle('low', p<20);
+  }
+  function levelBanner(cfg){
+    $('objective').innerHTML='<span class="lvl">LEVEL '+cfg.id+' — '+cfg.name+'</span>'+cfg.obj;
+    toast('LEVEL '+cfg.id+' · '+cfg.name);
+  }
+  function caption(t){ const c=$('caption'); c.textContent=t; c.classList.add('on'); capT=5.5; }
+  function toast(t){ const c=$('toast'); c.textContent=t; c.classList.add('on'); toastT=2.2; }
+  function flash(v){ flashV=Math.max(flashV,v); }
+  function shake(v){ shakeT=Math.max(shakeT,v); shakeP=Math.max(shakeP,v); }
+  function stretch(v){ stretchT=Math.max(stretchT,v); }
+  function dreadFlash(){
+    const d=$('dread'); d.style.opacity=0.85;
+    setTimeout(()=>{ d.style.opacity=0; }, 1400);
+  }
+  function fade(on){ $('fadeout').classList.toggle('on', !!on); }
+  function cursorAt(x,y){ const r=$('reticle'); r.style.left=x+'px'; r.style.top=y+'px';
+    const h=$('hovername'); h.style.left=x+'px'; h.style.top=y+'px'; }
+  function pingAt(){ /* reticle pulse handled by CSS scale */ }
+
+  function showNote(title,text){
+    $('noteTitle').textContent='— '+title+' —';
+    $('noteText').textContent=text;
+    $('noteImg').classList.add('hidden');
+    $('note').classList.remove('hidden'); $('note').classList.add('on');
+    state.paused=true;
+  }
+  function showPhoto(title,text,url){
+    $('noteTitle').textContent='— '+title+' —';
+    $('noteText').textContent=text;
+    const img=$('noteImg');
+    if(url){ img.src=url; img.classList.remove('hidden'); }
+    else img.classList.add('hidden');
+    $('note').classList.remove('hidden'); $('note').classList.add('on');
+    state.paused=true;
+  }
+  function hideNote(){ $('note').classList.add('hidden'); $('note').classList.remove('on'); state.paused=false; }
+
+  /* The dossier deliberately files contradictory accounts side by side and
+     refuses to rank them. */
+  function buildDossier(){
+    const found=[];
+    FRAGMENTS.forEach(f=>{ if(state.fragments.indexOf(f.id)>=0) found.push({voice:f.voice, text:f.text, kind:f.kind}); });
+    JAMES_LOCKER_ITEMS.forEach(j=>{ if(state.fragments.indexOf(j.id)>=0) found.push({voice:j.voice, text:j.text, kind:'james'}); });
+    const warm=found.filter(f=>f.kind==='warm').length;
+    const cold=found.filter(f=>f.kind==='cold').length;
+    const game=found.filter(f=>f.kind==='game').length;
+
+    $('dosHead').innerHTML =
+      'ACCOUNTS RECOVERED ...... '+found.length+' / '+TOTAL_TESTIMONY+'<br>'+
+      'PHOTOGRAPHS SEEN ........ '+state.photos.length+' / 3<br>'+
+      'SPEAK WELL OF HIM ....... '+warm+'<br>'+
+      'SPEAK BADLY OF HIM ...... '+cold+'<br>'+
+      'VERSIONS OF THAT GAME ... '+game;
+
+    const list=$('dosList');
+    list.innerHTML='';
+    if(!found.length){
+      const d=document.createElement('div');
+      d.className='dosEntry';
+      d.innerHTML='<div class="said">Nothing yet. People left a lot of paper in this building.</div>';
+      list.appendChild(d);
+    }
+    found.forEach(f=>{
+      const d=document.createElement('div');
+      d.className='dosEntry '+(f.kind||'');
+      const who=document.createElement('div'); who.className='who'; who.textContent=f.voice;
+      const said=document.createElement('div'); said.className='said'; said.textContent=f.text;
+      d.appendChild(who); d.appendChild(said);
+      list.appendChild(d);
+    });
+
+    let foot;
+    if(!found.length) foot='You do not know who James was. Neither, it turns out, does anyone who wrote any of this down.';
+    else if(found.length<6) foot='Not enough to say anything with. Everyone you have read so far was certain, and no two of them were certain about the same thing.';
+    else if(!state.jamesOpened) foot='Two dozen people describing someone none of them asked a single question. The only account missing is his.';
+    else foot='You have his own words now, and they do not settle it either. They just move the question: not what he was, but who was supposed to have noticed.';
+    $('dosFoot').textContent=foot;
+  }
+  function toggleDossier(){
+    const p=$('dossier');
+    const open=p.classList.contains('hidden');
+    if(open){ buildDossier(); p.classList.remove('hidden'); p.classList.add('on'); state.paused=true; }
+    else{ p.classList.add('hidden'); p.classList.remove('on'); state.paused=false; }
+    Audio.ui();
+  }
+
+  function prompt(title,sub,body,yes,no){
+    $('promptTitle').textContent=title; $('promptSub').textContent=sub;
+    $('promptBody').textContent=body;
+    const p=$('prompt'); p.classList.remove('hidden'); p.classList.add('on');
+    state.paused=true;
+    $('promptYes').onclick=()=>{ closePrompt(); Audio.ui('ok'); yes&&yes(); };
+    $('promptNo').onclick =()=>{ closePrompt(); Audio.ui('bad'); no&&no(); };
+  }
+  function closePrompt(){ const p=$('prompt'); p.classList.add('hidden'); p.classList.remove('on'); state.paused=false; }
+
+  function buildInv(){
+    const g=$('invGrid'); g.innerHTML='';
+    const slots=12;
+    for(let i=0;i<slots;i++){
+      const d=document.createElement('div'); d.className='slot';
+      const it=state.inventory[i];
+      if(it){ d.classList.add('has'); d.textContent=it.label;
+        d.onclick=()=>{
+          Array.from(g.children).forEach(c=>c.classList.remove('sel'));
+          d.classList.add('sel');
+          if(it.kind==='note'||it.kind==='frag'){
+            $('invDesc').textContent=it.title+'\n\n'+it.text;
+          }else $('invDesc').textContent=it.desc||'';
+          Audio.ui();
+        };
+      }else d.textContent='';
+      g.appendChild(d);
+    }
+    $('invDesc').textContent = 'DOCUMENTS RECOVERED: '+state.lore.length+' / '+NOTES.length
+      + '   ·   BASKETBALLS: '+totalCollected()+' / '+TOTAL_BALLS
+      + '\nTESTIMONY: '+state.fragments.length+' / '+TOTAL_TESTIMONY
+      + '   ·   PHOTOGRAPHS: '+state.photos.length+' / 3';
+  }
+  function toggleInv(){
+    const p=$('inv');
+    const open=p.classList.contains('hidden');
+    if(open){ buildInv(); p.classList.remove('hidden'); p.classList.add('on'); state.paused=true; }
+    else { p.classList.add('hidden'); p.classList.remove('on'); state.paused=false; }
+    Audio.ui();
+  }
+  function togglePause(){
+    const p=$('pause');
+    const open=p.classList.contains('hidden');
+    if(open){
+      const mins=Math.floor(state.elapsed/60), secs=Math.floor(state.elapsed%60);
+      $('stats').innerHTML =
+        'SECTION ......... '+currentLevel.name+'<br>'+
+        'COUNT ........... '+state.ballsHere+' / '+state.needHere+'<br>'+
+        'TOTAL RECOVERED . '+totalCollected()+' / '+TOTAL_BALLS+'<br>'+
+        'DOCUMENTS ....... '+state.lore.length+' / '+NOTES.length+'<br>'+
+        'TESTIMONY ....... '+state.fragments.length+' / '+TOTAL_TESTIMONY+'<br>'+
+        'BATTERY ......... '+Math.round(state.battery*100)+'%<br>'+
+        'INCIDENTS ....... '+state.deaths+'<br>'+
+        'TIME ON SHIFT ... '+mins+'m '+String(secs).padStart(2,'0')+'s';
+      p.classList.remove('hidden'); p.classList.add('on'); state.paused=true;
+    }else{ p.classList.add('hidden'); p.classList.remove('on'); state.paused=false; }
+    Audio.ui();
+  }
+  function showEnding(e){
+    state.frozen=true;
+    $('endTitle').textContent=e.title;
+    $('endSub').textContent=e.sub;
+    $('endBody').textContent=e.body;
+    const mins=Math.floor(state.elapsed/60);
+    $('endStats').innerHTML =
+      'BASKETBALLS RECOVERED ... '+totalCollected()+' / '+TOTAL_BALLS+'<br>'+
+      'DOCUMENTS FOUND ......... '+state.lore.length+' / '+NOTES.length+'<br>'+
+      'ACCOUNTS OF JAMES ....... '+state.fragments.length+' / '+TOTAL_TESTIMONY+'<br>'+
+      'PHOTOGRAPHS ............. '+state.photos.length+' / 3<br>'+
+      'INCIDENTS ............... '+state.deaths+'<br>'+
+      'SHIFT LENGTH ............ '+mins+' MINUTES';
+    const p=$('ending'); p.classList.remove('hidden'); p.classList.add('on');
+    state.paused=true;
+    Audio.stopAmbient();
+  }
+
+  function showGameOver(){
+    const p=$('gameover');
+    $('goSub').textContent = '\u201C'+GAMEOVER_SUB+'\u201D';
+    $('goHome').textContent = String(totalCollected()).padStart(2,'0');
+    $('goAway').textContent = String(TOTAL_BALLS).padStart(2,'0');
+    $('goClock').textContent = '0:00';
+    const mins=Math.floor(state.elapsed/60);
+    $('goStats').innerHTML =
+      'SECTION ......... LEVEL '+currentLevel.id+' — '+currentLevel.name+'<br>'+
+      'COUNT THIS AREA . '+state.ballsHere+' / '+state.needHere+'<br>'+
+      'INCIDENTS ....... '+state.deaths+'<br>'+
+      'TIME ON SHIFT ... '+mins+' MINUTES';
+    p.classList.remove('hidden');
+    // one frame with the panel displayed but transparent, so the fade actually runs
+    requestAnimationFrame(()=>requestAnimationFrame(()=>p.classList.add('vis','on')));
+    state.paused=true;
+  }
+  function hideGameOver(){
+    const p=$('gameover');
+    p.classList.add('hidden'); p.classList.remove('vis','on');
+  }
+
+  function hover(o){
+    const h=$('hovername'), r=$('reticle');
+    if(o){ h.textContent=o.userData.I.label; r.classList.add('hot'); }
+    else{ h.textContent=''; r.classList.remove('hot'); }
+  }
+
+  function tick(dt){
+    if(capT>0){ capT-=dt; if(capT<=0) $('caption').classList.remove('on'); }
+    if(toastT>0){ toastT-=dt; if(toastT<=0) $('toast').classList.remove('on'); }
+    if(flashV>0){ $('flash').style.opacity=flashV; flashV=Math.max(0,flashV-dt*2.2); }
+    else $('flash').style.opacity=0;
+    $('dread').style.opacity = Math.max(parseFloat($('dread').style.opacity)||0, state.dread*0.35);
+    if(shakeT>0) shakeT-=dt;
+    if(stretchT>0) stretchT-=dt;
+    // clock
+    const t=state.elapsed;
+    const base=3*3600+14*60;
+    const tot=base+Math.floor(t*3);
+    const hh=Math.floor(tot/3600)%12||12, mm=Math.floor(tot/60)%60, ss=tot%60;
+    $('clock').textContent=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0')+' AM';
+  }
+  return {updateHUD, levelBanner, caption, toast, flash, shake, stretch, dreadFlash, fade,
+          cursorAt, pingAt, showNote, showPhoto, hideNote, prompt, buildInv, toggleInv,
+          toggleDossier, togglePause, showEnding, showGameOver, hideGameOver, hover, tick,
+          get shakeAmt(){return shakeT>0?shakeT:0;},
+          get stretchAmt(){return stretchT>0?stretchT:0;}};
+})();
+
+/* ==========================================================================
+   12 — POST FX
+   ========================================================================== */
+let rt=null;
+const fxScene=new THREE.Scene();
+const fxCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const fxMat=new THREE.ShaderMaterial({
+  uniforms:{
+    tDiffuse:{value:null}, uTime:{value:0}, uGrain:{value:0.16}, uVhs:{value:0.5},
+    uDistort:{value:0.0}, uChroma:{value:0.0016}, uVig:{value:1.0}, uDread:{value:0.0},
+    uRes:{value:new THREE.Vector2(1,1)}
+  },
+  vertexShader:[
+    'varying vec2 vUv;',
+    'void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }'
+  ].join('\n'),
+  fragmentShader:[
+    'uniform sampler2D tDiffuse; uniform float uTime,uGrain,uVhs,uDistort,uChroma,uVig,uDread;',
+    'uniform vec2 uRes; varying vec2 vUv;',
+    'float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }',
+    'void main(){',
+    '  vec2 uv=vUv;',
+    // VHS horizontal wobble
+    '  float band = sin(uv.y*260.0 + uTime*3.0);',
+    '  float wob = (hash(vec2(floor(uv.y*180.0), floor(uTime*11.0)))-0.5);',
+    '  uv.x += wob*0.0022*uVhs + band*0.0006*uVhs;',
+    // tape distortion sweep
+    '  float sweep = smoothstep(0.0,0.06, abs(fract(uTime*0.14)-uv.y));',
+    '  uv.x += (1.0-sweep)*0.010*uVhs;',
+    // scare warp
+    '  vec2 c = uv-0.5;',
+    '  float rr = length(c);',
+    '  uv += c*sin(rr*22.0-uTime*5.0)*0.012*uDistort;',
+    // chromatic aberration
+    '  float ca = uChroma + uDread*0.004 + uDistort*0.006;',
+    '  float r = texture2D(tDiffuse, uv+vec2(ca,0.0)).r;',
+    '  float g = texture2D(tDiffuse, uv).g;',
+    '  float b = texture2D(tDiffuse, uv-vec2(ca,0.0)).b;',
+    '  vec3 col = vec3(r,g,b);',
+    // colour quantisation (PS1 15-bit-ish)
+    '  col = floor(col*32.0+0.5)/32.0;',
+    // scanlines + tracking lines
+    '  float sl = 0.90 + 0.10*sin(vUv.y*uRes.y*3.14159);',
+    '  col *= sl;',
+    '  float track = step(0.9975, hash(vec2(floor(vUv.y*90.0), floor(uTime*8.0))));',
+    '  col += track*0.16;',
+    // film grain
+    '  float gr = hash(vUv*uRes + uTime*60.0);',
+    '  col += (gr-0.5)*uGrain;',
+    // vignette + dread tint
+    '  float v = smoothstep(0.98,0.28, rr*1.35);',
+    '  col *= mix(1.0, v, uVig);',
+    '  col = mix(col, col*vec3(1.25,0.72,0.66), uDread*0.55);',
+    '  gl_FragColor = vec4(col,1.0);',
+    '}'
+  ].join('\n')
+});
+fxScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), fxMat));
+
+function resize(){
+  const w=window.innerWidth, h=window.innerHeight;
+  renderer.setSize(w,h);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  const rw=Math.min(CFG.pixelWidth, Math.floor(w/2.6));
+  const rh=Math.max(2, Math.floor(rw*h/w));
+  if(rt) rt.dispose();
+  rt=new THREE.WebGLRenderTarget(rw,rh,{
+    minFilter:THREE.NearestFilter, magFilter:THREE.NearestFilter,
+    format:THREE.RGBAFormat, depthBuffer:true, stencilBuffer:false});
+  fxMat.uniforms.uRes.value.set(rw,rh);
+  fxMat.uniforms.tDiffuse.value=rt.texture;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ==========================================================================
+   MAIN LOOP
+   ========================================================================== */
+const tmpV=new THREE.Vector3();
+const fwdV=new THREE.Vector3();
+const upV=new THREE.Vector3(0,1,0);
+let hoverObj=null, hoverT=0;
+
+function updatePlayer(dt){
+  // Controls lock during menus and the game over sequence, but the camera block
+  // below keeps running so the detection shake is actually visible.
+  const locked = state.frozen || state.paused;
+  let moved=false;
+
+  if(!locked && !state.hiding){
+    // keyboard fallback (no sprint — deliberately slow)
+    let kx=0,kz=0;
+    if(keys['KeyW']||keys['ArrowUp'])kz-=1;
+    if(keys['KeyS']||keys['ArrowDown'])kz+=1;
+    if(keys['KeyA']||keys['ArrowLeft'])kx-=1;
+    if(keys['KeyD']||keys['ArrowRight'])kx+=1;
+    if(kx||kz){
+      player.target=null; player.pendingInteract=null;
+      const len=Math.hypot(kx,kz); kx/=len; kz/=len;
+      const s=Math.sin(player.yaw), c=Math.cos(player.yaw);
+      const dx=( kx*c + kz*s)*CFG.walkSpeed*dt;
+      const dz=(-kx*s + kz*c)*CFG.walkSpeed*dt;
+      movePlayer(dx,dz); moved=true;
+    }
+    // click-to-move
+    if(player.target){
+      const d=tmpV.set(player.target.x-player.pos.x,0,player.target.z-player.pos.z);
+      const dist=d.length();
+      if(dist<CFG.arriveDist){
+        player.target=null;
+        if(player.pendingInteract){
+          const po=player.pendingInteract; player.pendingInteract=null;
+          if(world.interactables.indexOf(po)>=0) interact(po);
+        }
+      }else{
+        d.normalize().multiplyScalar(CFG.walkSpeed*dt);
+        const before=player.pos.x+player.pos.z;
+        movePlayer(d.x,d.z);
+        moved=true;
+        if(Math.abs(player.pos.x+player.pos.z-before)<0.0005){
+          // stuck against geometry
+          player.target=null;
+          if(player.pendingInteract){
+            const po=player.pendingInteract; player.pendingInteract=null;
+            const dd=player.pos.distanceTo(po.getWorldPosition(new THREE.Vector3()));
+            if(dd<=po.userData.I.range+0.7 && world.interactables.indexOf(po)>=0) interact(po);
+          }
+        }
+      }
+    }
+  }
+  player.moving=moved;
+  if(!locked){
+    if(moved){
+      player.stepT-=dt;
+      player.bob += dt*7.4;
+      if(player.stepT<=0){ Audio.footstep(0.8+Math.random()*0.3); player.stepT=0.62; }
+    }else{
+      player.bob += dt*1.2;
+    }
+  }
+
+  // camera
+  const bobY = (player.moving? Math.sin(player.bob)*0.035 : Math.sin(player.bob*0.6)*0.008);
+  const bobX = (player.moving? Math.cos(player.bob*0.5)*0.02 : 0);
+  camera.position.set(player.pos.x+bobX, (state.hiding?CFG.eye-0.22:CFG.eye)+bobY, player.pos.z);
+  camera.rotation.set(0,0,0,'YXZ');
+  camera.rotation.order='YXZ';
+  camera.rotation.y=player.yaw;
+  camera.rotation.x=player.pitch + (player.moving?Math.sin(player.bob*2)*0.004:0);
+  if(UI.shakeAmt>0){
+    camera.position.x += rnd(-1,1)*0.03*UI.shakeAmt;
+    camera.position.y += rnd(-1,1)*0.03*UI.shakeAmt;
+    camera.rotation.z = rnd(-1,1)*0.012*UI.shakeAmt;
+  }else camera.rotation.z = state.dread*Math.sin(performance.now()*0.0006)*0.012;
+
+  // FOV stretch during geometry events
+  const st=UI.stretchAmt;
+  const targetFov = 68 + st*16 + state.dread*3;
+  if(Math.abs(camera.fov-targetFov)>0.05){ camera.fov=lerp(camera.fov,targetFov,dt*3); camera.updateProjectionMatrix(); }
+}
+
+function updateFlashlight(dt){
+  if(state.flashOn && state.battery>0 && !state.paused && !state.frozen){
+    state.battery=clamp(state.battery - CFG.batteryDrain*dt*(1+state.dread*0.4),0,1);
+    if(state.battery<=0){
+      state.flashOn=false; Audio.fail();
+      UI.caption('The flashlight dies. The dark is not empty.');
+      UI.updateHUD();
+      state.dread=clamp(state.dread+0.25,0,1);
+    }
+    if(state.battery<0.16 && Math.random()<dt*0.7) Scares.flicker(0.6);
+  }
+  const want = LIGHT.flash*batteryFactor();
+  // Scares.update may be driving the flicker; only settle when it isn't
+  flashlight.intensity = lerp(flashlight.intensity, want, dt*6);
+  spill.intensity = LIGHT.spill*batteryFactor()+0.023;
+  if(Math.floor(state.elapsed*4)%40===0){} // keep HUD light
+}
+
+function updateHover(dt){
+  hoverT-=dt;
+  if(hoverT>0) return;
+  hoverT=0.08;
+  if(state.paused||state.frozen||!state.started){ UI.hover(null); return; }
+  raycaster.setFromCamera(mouse, camera);
+  const hits=raycaster.intersectObjects(world.interactables,false);
+  if(hits.length){
+    const o=hits[0].object;
+    hoverObj=o; UI.hover(o);
+  }else{ hoverObj=null; UI.hover(null); }
+}
+
+function updateAnims(dt){
+  const t=performance.now()*0.001;
+  world.anims.forEach(a=>{
+    if(a.type==='shower' && a.data.on){
+      if(Math.random()<dt*8){
+        // cheap water particles: jitter the head
+        a.data.head.position.y = 1.82 + Math.sin(t*40)*0.006;
+      }
+    }
+    if(a.type==='shutter'){
+      const d=a.data; d.t-=dt;
+      if(d.t<=0){
+        d.t=rnd(14,34);
+        d.open=!d.open;
+        d.mesh.position.y = d.open? d.base : d.base-1.5;
+        Audio.doorOpen(d.mesh.getWorldPosition(new THREE.Vector3()));
+      }
+    }
+  });
+  // ceiling fixture flicker visuals
+  world.flickerLights.forEach(f=>{
+    if(f.on) f.tube.material.color.setRGB(0.9,0.95,1.0);
+    else f.tube.material.color.setRGB(0.04,0.05,0.07);
+  });
+  // balls idle rotate a touch
+  world.interactables.forEach(o=>{
+    if(o.userData.I.type==='ball') o.rotation.y += dt*0.25;
+  });
+}
+
+let acc=0;
+function loop(){
+  requestAnimationFrame(loop);
+  let dt=Math.min(clock.getDelta(),0.06);
+  if(!state.started){ renderFrame(dt); return; }
+  if(!state.paused && !state.frozen) state.elapsed+=dt;
+
+  updatePlayer(dt);
+  updateFlashlight(dt);
+  updateHover(dt);
+  if(!state.paused && !state.frozen){
+    Scares.update(dt);
+    Collector.update(dt);
+    updateAnims(dt);
+    // proximity dread from the collector
+    if(Collector.isNear(14)){
+      const d=Collector.pos().distanceTo(player.pos);
+      state.dread=clamp(state.dread + (14-d)*0.004*dt*10, 0, 1);
+      Audio.duck(clamp(0.62 - (14-d)*0.03, 0.2, 0.62));
+    }
+    state.dread=clamp(state.dread-dt*0.012,0,1);
+  }
+  UI.tick(dt);
+
+  // audio listener
+  camera.getWorldDirection(fwdV);
+  Audio.listener(camera.position, fwdV, upV);
+
+  renderFrame(dt);
+}
+
+function renderFrame(dt){
+  const u=fxMat.uniforms;
+  u.uTime.value += dt;
+  u.uDread.value = state.dread;
+  u.uGrain.value = 0.13 + state.dread*0.16;
+  u.uVhs.value   = 0.45 + state.dread*0.8 + (state.battery<0.2?0.4:0);
+  u.uDistort.value = lerp(u.uDistort.value, UI.shakeAmt*0.9 + UI.stretchAmt*0.5 + (state.hiding?0.25:0), dt*4);
+  renderer.setRenderTarget(rt);
+  renderer.clear();
+  renderer.render(scene,camera);
+  renderer.setRenderTarget(null);
+  renderer.render(fxScene,fxCam);
+}
+
+/* ==========================================================================
+   START / MENUS
+   ========================================================================== */
+function startGame(levelIdx){
+  Audio.init(); Audio.resume();
+  state.started=true; state.paused=false; state.frozen=false; state.gameOver=false;
+  state.hiding=false;
+  state.startTime=Date.now();
+  $('title').classList.add('hidden'); $('title').classList.remove('on');
+  $('ending').classList.add('hidden'); $('ending').classList.remove('on');
+  $('hidebars').classList.remove('on');
+  $('redflash').style.opacity=0;
+  UI.hideGameOver();
+  UI.fade(false);
+  loadLevel(levelIdx||0);
+  UI.buildInv();
+  UI.updateHUD();
+  setTimeout(()=>{
+    UI.caption('Power went out city-wide at 3:11. Finish the sweep, count the balls, go home.');
+  }, 1400);
+}
+function newGame(){
+  state.collected={}; state.inventory=[]; state.lore=[]; state.battery=1;
+  state.deaths=0; state.dread=0; state.elapsed=0; state.ending=null;
+  state.flashOn=true;
+  state.fragments=[]; state.photos=[]; state.jamesOpened=false;
+  startGame(0);
+}
+
+$('btnNew').onclick=()=>{ Audio.init(); Audio.ui('ok'); newGame(); };
+$('btnLoad').onclick=()=>{ Audio.init(); if(!loadGame()){ UI.toast('NO SHIFT LOG FOUND'); Audio.fail(); } };
+$('btnHow').onclick=()=>{
+  Audio.init();
+  UI.showNote('EMPLOYEE HANDBOOK — NIGHT CUSTODIAL',
+    'MOVEMENT\n  Click the floor to walk there. You cannot run.\n  Drag with the mouse to look around.\n  WASD also walks, if you prefer.\n\nINTERACTION\n  Click a basketball, note, key or door to use it.\n  If it is far away you will walk to it first.\n\nFLASHLIGHT\n  F toggles the light. It drains the battery.\n  Spare D-cells are scattered through the building.\n\nHIDING\n  When something is walking toward you, click a locker,\n  stall or alcove to hide. Press E to come out.\n  Do not come out while it is still close.\n\nINVENTORY\n  I or TAB. ESC pauses and saves.\n\nTHE JAMES FILE\n  J opens everything the building has told you about\n  a player called James. None of it agrees.\n\nRULES\n  Collect every basketball in a section before you leave it.\n  The count must match. Do not count out loud.');
+  state.paused=false;
+};
+$('noteClose').onclick=()=>{ UI.hideNote(); Audio.ui(); };
+$('btnInvClose').onclick=()=>UI.toggleInv();
+$('btnDossier').onclick=()=>{ UI.toggleInv(); UI.toggleDossier(); };
+$('btnDosClose').onclick=()=>UI.toggleDossier();
+$('btnResume').onclick=()=>UI.togglePause();
+$('btnSave').onclick=()=>saveGame();
+$('btnLoad2').onclick=()=>{ UI.togglePause(); if(!loadGame()) UI.toast('NO SHIFT LOG FOUND'); };
+$('btnQuit').onclick=()=>{
+  UI.togglePause(); state.started=false; Audio.stopAmbient();
+  $('title').classList.remove('hidden'); $('title').classList.add('on');
+};
+$('btnRestartLevel').onclick=()=>{ Audio.ui('ok'); restartLevel(); };
+$('btnGoMenu').onclick=()=>{ Audio.ui('bad'); toMainMenu(); };
+$('btnEndAgain').onclick=()=>{
+  $('ending').classList.add('hidden'); $('ending').classList.remove('on');
+  state.paused=false; state.frozen=false;
+  $('title').classList.remove('hidden'); $('title').classList.add('on');
+  state.started=false;
+};
+$('btnLoad').disabled = !hasSave();
+
+/* title-screen idle scene so the menu isn't over a black void */
+(function titleScene(){
+  clearWorld();
+  buildMaterials(LEVELS[0]);
+  const r={x:0,z:-6,w:12,d:10,h:3.2,type:'lockerRoom',open:{}};
+  buildRoom(r, MATS.wall);
+  dressRoom(r, LEVELS[0], true);
+  world.rooms=[r];
+  player.pos.set(0,CFG.eye,-1.5); player.yaw=0; player.pitch=-0.02;
+  camera.position.copy(player.pos); camera.rotation.set(0,0,0,'YXZ');
+  flashlight.intensity=LIGHT.title;
+  const ghost=collectorSilhouette(1.2);
+  ghost.position.set(3.2,0,-10.4); ghost.rotation.y=-0.5; scene.add(ghost);
+  setInterval(()=>{
+    if(state.started){ ghost.visible=false; return; }
+    ghost.visible=Math.random()<0.55;
+  }, 2600);
+  // slow drift of the idle camera
+  let a=0;
+  setInterval(()=>{ if(state.started) return; a+=0.01;
+    player.yaw=Math.sin(a)*0.22; camera.rotation.y=player.yaw;
+    camera.position.y=CFG.eye+Math.sin(a*2)*0.02; }, 40);
+})();
+
+$('loading').style.display='none';
+loop();
+
+if(window.__ATB_DEBUG){
+  window.__ATB={state:state, world:world, player:player, LEVELS:LEVELS, NOTES:NOTES,
+    loadLevel:loadLevel, interact:interact, tryExit:tryExit, advanceLevel:advanceLevel,
+    Collector:Collector, Scares:Scares, UI:UI, Audio:Audio, newGame:newGame,
+    startGame:startGame, saveGame:saveGame, loadGame:loadGame, onCaught:onCaught,
+    restartLevel:restartLevel, toMainMenu:toMainMenu, DETECT:DETECT,
+    FRAGMENTS:FRAGMENTS, JAMES_LOCKER_ITEMS:JAMES_LOCKER_ITEMS,
+    PHOTO_PLACEMENTS:PHOTO_PLACEMENTS, TOTAL_TESTIMONY:TOTAL_TESTIMONY,
+    openJamesLocker:openJamesLocker,
+    resolveEnding:resolveEnding, totalCollected:totalCollected, enterHide:enterHide,
+    exitHide:exitHide, addItem:addItem, hasItem:hasItem, TOTAL_BALLS:TOTAL_BALLS,
+    collides:collides, freeSpotNear:freeSpotNear, CFG:CFG};
+}
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+.DS_Store
+*.log
+
+# Other projects in this workspace, not part of this deployment
+Wild Card/
+deploy/
+
+# Local build output; docs/ is what GitHub Pages serves
+After the Buzzer/dist/
