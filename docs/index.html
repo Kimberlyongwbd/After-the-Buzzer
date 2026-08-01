@@ -50,10 +50,15 @@
   .ballicon:after{top:50%;left:0;height:1px;width:100%;transform:translateY(-50%);}
 
   .bat{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);}
-  .batshell{width:78px;height:11px;border:1px solid #93805c;position:relative;padding:1px;}
+  .batshell{width:78px;height:11px;border:1px solid #93805c;position:relative;padding:1px;
+    display:flex;align-items:stretch;}
   .batshell:after{content:"";position:absolute;right:-4px;top:3px;width:3px;height:5px;background:#93805c;}
-  .batfill{height:100%;background:var(--amber);width:100%;transition:width .25s linear;}
-  .batfill.low{background:#ff5f52;animation:blink 1s steps(2,end) infinite;}
+  .batseg{display:flex;flex:1;gap:1px;height:100%;}
+  .batbar{flex:1;background:rgba(0,0,0,.32);box-shadow:inset 0 0 0 1px rgba(90,78,56,.45);}
+  .batbar.on.hi{background:#4a8a48;box-shadow:0 0 5px rgba(74,138,72,.5),inset 0 1px 0 rgba(255,255,255,.14);}
+  .batbar.on.mid{background:#a88830;box-shadow:0 0 4px rgba(168,136,48,.45),inset 0 1px 0 rgba(255,255,255,.12);}
+  .batbar.on.low{background:#9a4038;box-shadow:0 0 5px rgba(154,64,56,.55),inset 0 1px 0 rgba(255,255,255,.1);}
+  .batshell.warn .batbar.on.low{animation:blink 1s steps(2,end) infinite;}
 
   /* ---------- cursor / reticle ---------- */
   #reticle{position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;
@@ -92,13 +97,44 @@
   #noteText{white-space:pre-wrap;font-size:14.5px;line-height:1.7;color:#1a1712;}
   #notePaper{background:var(--paper);padding:26px 28px;border:1px solid #7a725e;
     box-shadow:0 0 80px rgba(0,0,0,.95);max-width:560px;width:min(88vw,560px);
+    font-weight:700;
     background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.03) 0 1px,transparent 1px 3px);}
-  #noteTitle{font-size:12px;letter-spacing:4px;color:#5c5343;margin-bottom:14px;}
+  /* text-indent cancels the trailing letter-space, which otherwise throws
+     centred text off by half a character */
+  #noteTitle{font-size:12px;letter-spacing:4px;color:#5c5343;margin-bottom:14px;
+    text-align:center;text-indent:4px;}
   #noteImg{display:block;width:100%;max-width:420px;margin:0 auto 16px;
     image-rendering:pixelated;border:1px solid #7a725e;
     box-shadow:0 3px 14px rgba(0,0,0,.4);}
-  #noteClose{margin-top:20px;border-color:#6d6350;color:#2a2519;}
+  #noteClose{margin-top:20px;border-color:#6d6350;color:#2a2519;text-align:center;}
   #noteClose:hover{background:#b7b0a0;color:#000;border-color:#000;}
+  /* handbook only — cheap 3-ring binder down the left edge */
+  #notePaper.bound{
+    position:relative;padding-left:48px;
+    background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.03) 0 1px,transparent 1px 3px);}
+  #notePaper.bound::before{
+    content:'';position:absolute;left:-1px;top:-1px;bottom:-1px;width:38px;
+    background:
+      linear-gradient(90deg,rgba(0,0,0,.16) 0%,rgba(0,0,0,.07) 50%,rgba(255,255,255,.05) 100%),
+      #b0a898;
+    border-right:1px solid #655d4e;
+    box-shadow:inset -4px 0 8px rgba(0,0,0,.12),3px 0 5px rgba(0,0,0,.07);
+    pointer-events:none;z-index:0;}
+  #notePaper.bound::after{
+    content:'';position:absolute;left:6px;top:0;bottom:0;width:24px;
+    background-image:
+      radial-gradient(circle at 14px 28px,
+        #12100d 0 2.8px,#2a2620 2.8px 3.4px,#8a8272 3.4px 4.8px,#c4bdb0 4.8px 5.6px,
+        #6a6358 5.6px 6.8px,#4a453c 6.8px 7.4px,transparent 7.4px 14px),
+      radial-gradient(circle at 14px 52px,
+        #12100d 0 2.8px,#2a2620 2.8px 3.4px,#8a8272 3.4px 4.8px,#c4bdb0 4.8px 5.6px,
+        #6a6358 5.6px 6.8px,#4a453c 6.8px 7.4px,transparent 7.4px 14px),
+      radial-gradient(circle at 14px 76px,
+        #12100d 0 2.8px,#2a2620 2.8px 3.4px,#8a8272 3.4px 4.8px,#c4bdb0 4.8px 5.6px,
+        #6a6358 5.6px 6.8px,#4a453c 6.8px 7.4px,transparent 7.4px 14px);
+    background-size:24px 96px;background-repeat:repeat-y;
+    pointer-events:none;z-index:1;}
+  #notePaper.bound>*{position:relative;z-index:2;}
 
   /* ---------- the James dossier ---------- */
   #dossier .box{max-width:720px;width:min(92vw,720px);}
@@ -217,11 +253,11 @@
   <div id="objective"><span class="lvl">LEVEL 1 — EMPLOYEE LOCKER ROOM</span><span id="objText">Collect the missing basketballs.</span></div>
   <div class="corner" id="botleft">
     <div class="ballcount"><span class="ballicon"></span><span id="ballNum">0 / 5</span></div>
-    <div class="bat"><span>BATT</span><span class="batshell"><span class="batfill" id="batFill"></span></span><span id="batPct">100%</span></div>
+    <div class="bat"><span>BATT</span><span class="batshell" id="batShell"><span class="batseg" id="batSegs"></span></span><span id="batPct">100%</span></div>
   </div>
   <div class="corner" id="botright">
-    <div style="font-size:11px;color:#9a8a68;line-height:1.8;text-align:right;">
-      CLICK FLOOR — WALK<br>CLICK OBJECT — USE<br>DRAG — LOOK &nbsp; F — LIGHT<br>I — INVENTORY &nbsp; ESC — PAUSE
+    <div style="font-size:11px;color:#9a8a68;line-height:1.8;text-align:right;font-weight:700;">
+      CLICK FLOOR — WALK<br>CLICK OBJECT — USE<br>MOVE MOUSE TO EDGE — LOOK<br>F — LIGHT &nbsp; I — INVENTORY<br>ESC — PAUSE
     </div>
   </div>
 </div>
@@ -248,7 +284,6 @@
       <button class="mi" id="btnHow">▶ &nbsp;EMPLOYEE HANDBOOK</button>
     </div>
     <div class="foot">
-      NIGHT CUSTODIAL — SECTOR 9 — CROWN CENTER ARENA<br>
       HEADPHONES RECOMMENDED · CONTAINS FLASHING IMAGES
     </div>
   </div>
@@ -370,11 +405,18 @@ if(!window.THREE){ document.getElementById('loading').textContent='THREE.JS FAIL
    0 — CONFIG & HELPERS
    ========================================================================== */
 const CFG = {
-  eye:1.68, walkSpeed:1.85, turnSpeed:0.0032, radius:0.42,
+  eye:1.68, walkSpeed:1.85, radius:0.42,
   drawDistance:70, pixelWidth:440,
   batteryDrain:1/900,       // full charge ≈ 15 minutes of light
   arriveDist:0.34,
-  bright:1.15               // global scale on every light source
+  bright:1.15,              // global scale on every light source
+  // Free look: the camera turns by how far the cursor sits from the middle of
+  // the screen, so nothing has to be held down and the cursor stays free to
+  // click. Inside the dead zone it does not turn at all.
+  lookDeadX:0.22, lookDeadY:0.26,
+  lookYawRate:2.05,         // rad/sec once the cursor is at the very edge
+  lookPitchRate:1.15,
+  lookEase:9.0              // how fast the turn rate catches up to the cursor
 };
 
 const rnd  = (a,b)=>a+Math.random()*(b-a);
@@ -2626,7 +2668,7 @@ function toggleFlash(){
 
 /* --- mouse / pointer --- */
 const mouse = new THREE.Vector2();
-let dragging=false, dragged=false, downX=0, downY=0, downT=0;
+let dragging=false, dragged=false, downX=0, downY=0, downT=0, pointerInside=true;
 const dom = renderer.domElement;
 
 dom.addEventListener('pointerdown', e=>{
@@ -2637,23 +2679,46 @@ dom.addEventListener('pointerdown', e=>{
 dom.addEventListener('pointermove', e=>{
   mouse.x = (e.clientX/window.innerWidth)*2-1;
   mouse.y = -(e.clientY/window.innerHeight)*2+1;
+  pointerInside = true;
   UI.cursorAt(e.clientX,e.clientY);
-  if(dragging && state.started && !state.paused && !state.frozen){
+  if(dragging){
     const dx=e.clientX-downX, dy=e.clientY-downY;
-    if(Math.abs(dx)+Math.abs(dy)>6) dragged=true;
-    if(dragged && !state.hiding){
-      player.yaw   -= e.movementX!==undefined? e.movementX*CFG.turnSpeed : dx*CFG.turnSpeed;
-      player.pitch -= e.movementY!==undefined? e.movementY*CFG.turnSpeed : dy*CFG.turnSpeed;
-      player.pitch = clamp(player.pitch, -1.15, 1.15);
-    }else if(dragged && state.hiding){
-      player.yaw -= (e.movementX||0)*CFG.turnSpeed*0.6;
-    }
+    // only a big sweep counts as "not a click" — the camera is steered by
+    // cursor position now, so a press-and-release is always meant as a click
+    if(Math.abs(dx)+Math.abs(dy)>40) dragged=true;
   }
 });
 dom.addEventListener('pointerup', e=>{
   if(dragging && !dragged && state.started && !state.paused && !state.frozen) handleClick();
   dragging=false;
 });
+// stop turning when the cursor leaves the window, or it would spin forever
+window.addEventListener('pointerleave', ()=>{ pointerInside=false; });
+window.addEventListener('blur', ()=>{ pointerInside=false; });
+window.addEventListener('pointerenter', ()=>{ pointerInside=true; });
+
+/* Turn rate from cursor offset. Squared response so small movements near the
+   dead zone are gentle and the edges are quick. */
+let yawVel=0, pitchVel=0;
+function lookAxis(v, dead){
+  const a=Math.abs(v);
+  if(a<=dead) return 0;
+  const t=(a-dead)/(1-dead);
+  return Math.sign(v)*Math.min(t,1)*Math.min(t,1);
+}
+function updateLook(dt){
+  let wantYaw=0, wantPitch=0;
+  if(pointerInside && state.started && !state.paused && !state.frozen){
+    wantYaw   = -lookAxis(mouse.x, CFG.lookDeadX)*CFG.lookYawRate;
+    wantPitch =  lookAxis(mouse.y, CFG.lookDeadY)*CFG.lookPitchRate;
+    if(state.hiding){ wantYaw*=0.5; wantPitch=0; }   // barely any room in there
+  }
+  const k=Math.min(1, dt*CFG.lookEase);
+  yawVel   += (wantYaw   - yawVel)*k;
+  pitchVel += (wantPitch - pitchVel)*k;
+  player.yaw   += yawVel*dt;
+  player.pitch  = clamp(player.pitch + pitchVel*dt, -1.15, 1.15);
+}
 window.addEventListener('contextmenu', e=>e.preventDefault());
 
 function handleClick(){
@@ -3480,14 +3545,36 @@ function resolveEnding(gave){
    ========================================================================== */
 const UI = (function(){
   let capT=0, toastT=0, shakeT=0, shakeP=0, stretchT=0, flashV=0;
+  const BAT_SEGS=10;
+  const batBars=[];
+  let lastLit=0, lastTier='hi';
+  (function initBatSegs(){
+    const wrap=$('batSegs');
+    for(let i=0;i<BAT_SEGS;i++){
+      const b=document.createElement('span');
+      b.className='batbar';
+      wrap.appendChild(b);
+      batBars.push(b);
+    }
+  })();
 
   function updateHUD(){
     $('ballNum').textContent = state.ballsHere+' / '+state.needHere;
     const p=Math.round(state.battery*100);
     $('batPct').textContent = p+'%';
-    const f=$('batFill'); f.style.width=Math.max(0,p)+'%';
-    f.classList.toggle('low', p<20);
+    const lit=state.battery<=0 ? 0 : Math.max(1, Math.round(state.battery*BAT_SEGS));
+    const tier=p>=50 ? 'hi' : p>=25 ? 'mid' : 'low';
+    lastLit=lit; lastTier=tier;
+    $('batShell').classList.toggle('warn', p>0 && p<25);
+    for(let i=0;i<BAT_SEGS;i++){
+      const b=batBars[i], on=i<lit;
+      b.classList.toggle('on', on);
+      b.classList.toggle('hi', on && tier==='hi');
+      b.classList.toggle('mid', on && tier==='mid');
+      b.classList.toggle('low', on && tier==='low');
+    }
   }
+  function readBatMeter(){ return {lit:lastLit, tier:lastTier, total:BAT_SEGS}; }
   function levelBanner(cfg){
     $('objective').innerHTML='<span class="lvl">LEVEL '+cfg.id+' — '+cfg.name+'</span>'+cfg.obj;
     toast('LEVEL '+cfg.id+' · '+cfg.name);
@@ -3506,10 +3593,11 @@ const UI = (function(){
     const h=$('hovername'); h.style.left=x+'px'; h.style.top=y+'px'; }
   function pingAt(){ /* reticle pulse handled by CSS scale */ }
 
-  function showNote(title,text){
+  function showNote(title,text,bound){
     $('noteTitle').textContent='— '+title+' —';
     $('noteText').textContent=text;
     $('noteImg').classList.add('hidden');
+    $('notePaper').classList.toggle('bound', !!bound);
     $('note').classList.remove('hidden'); $('note').classList.add('on');
     state.paused=true;
   }
@@ -3519,10 +3607,14 @@ const UI = (function(){
     const img=$('noteImg');
     if(url){ img.src=url; img.classList.remove('hidden'); }
     else img.classList.add('hidden');
+    $('notePaper').classList.remove('bound');
     $('note').classList.remove('hidden'); $('note').classList.add('on');
     state.paused=true;
   }
-  function hideNote(){ $('note').classList.add('hidden'); $('note').classList.remove('on'); state.paused=false; }
+  function hideNote(){
+    $('notePaper').classList.remove('bound');
+    $('note').classList.add('hidden'); $('note').classList.remove('on'); state.paused=false;
+  }
 
   /* The dossier deliberately files contradictory accounts side by side and
      refuses to rank them. */
@@ -3692,7 +3784,7 @@ const UI = (function(){
     const hh=Math.floor(tot/3600)%12||12, mm=Math.floor(tot/60)%60, ss=tot%60;
     $('clock').textContent=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0')+' AM';
   }
-  return {updateHUD, levelBanner, caption, toast, flash, shake, stretch, dreadFlash, fade,
+  return {updateHUD, readBatMeter, levelBanner, caption, toast, flash, shake, stretch, dreadFlash, fade,
           cursorAt, pingAt, showNote, showPhoto, hideNote, prompt, buildInv, toggleInv,
           toggleDossier, togglePause, showEnding, showGameOver, hideGameOver, hover, tick,
           get shakeAmt(){return shakeT>0?shakeT:0;},
@@ -3929,6 +4021,7 @@ function loop(){
   if(!state.started){ renderFrame(dt); return; }
   if(!state.paused && !state.frozen) state.elapsed+=dt;
 
+  updateLook(dt);
   updatePlayer(dt);
   updateFlashlight(dt);
   updateHover(dt);
@@ -4001,7 +4094,7 @@ $('btnLoad').onclick=()=>{ Audio.init(); if(!loadGame()){ UI.toast('NO SHIFT LOG
 $('btnHow').onclick=()=>{
   Audio.init();
   UI.showNote('EMPLOYEE HANDBOOK — NIGHT CUSTODIAL',
-    'MOVEMENT\n  Click the floor to walk there. You cannot run.\n  Drag with the mouse to look around.\n  WASD also walks, if you prefer.\n\nINTERACTION\n  Click a basketball, note, key or door to use it.\n  If it is far away you will walk to it first.\n\nFLASHLIGHT\n  F toggles the light. It drains the battery.\n  Spare D-cells are scattered through the building.\n\nHIDING\n  When something is walking toward you, click a locker,\n  stall or alcove to hide. Press E to come out.\n  Do not come out while it is still close.\n\nINVENTORY\n  I or TAB. ESC pauses and saves.\n\nTHE JAMES FILE\n  J opens everything the building has told you about\n  a player called James. None of it agrees.\n\nRULES\n  Collect every basketball in a section before you leave it.\n  The count must match. Do not count out loud.');
+    'MOVEMENT\n  Click the floor to walk there. You cannot run.\n  Move the mouse toward the edge of the screen to\n  look around. The middle of the screen is still.\n  WASD also walks, if you prefer.\n\nINTERACTION\n  Click a basketball, note, key or door to use it.\n  If it is far away you will walk to it first.\n\nFLASHLIGHT\n  F toggles the light. It drains the battery.\n  Spare D-cells are scattered through the building.\n\nHIDING\n  When something is walking toward you, click a locker,\n  stall or alcove to hide. Press E to come out.\n  Do not come out while it is still close.\n\nINVENTORY\n  I or TAB. ESC pauses and saves.\n\nRULES\n  Collect every basketball in a section before you leave it.\n  The count must match. Do not count out loud.', true);
   state.paused=false;
 };
 $('noteClose').onclick=()=>{ UI.hideNote(); Audio.ui(); };
@@ -4058,6 +4151,8 @@ if(window.__ATB_DEBUG){
     Collector:Collector, Scares:Scares, UI:UI, Audio:Audio, newGame:newGame,
     startGame:startGame, saveGame:saveGame, loadGame:loadGame, onCaught:onCaught,
     restartLevel:restartLevel, toMainMenu:toMainMenu, DETECT:DETECT,
+    mouse:mouse, updateLook:updateLook,
+    setPointerInside:v=>{ pointerInside=v; },
     FRAGMENTS:FRAGMENTS, JAMES_LOCKER_ITEMS:JAMES_LOCKER_ITEMS,
     PHOTO_PLACEMENTS:PHOTO_PLACEMENTS, TOTAL_TESTIMONY:TOTAL_TESTIMONY,
     openJamesLocker:openJamesLocker,

@@ -27,7 +27,7 @@ closer to how it runs when deployed.
 | Input | Action |
 | --- | --- |
 | Click floor | Walk there |
-| Drag mouse | Look around |
+| Move mouse toward screen edge | Look around |
 | WASD | Walk, if you prefer |
 | Click object | Collect, read, or use it |
 | `F` | Flashlight (drains the battery) |
