@@ -33,6 +33,7 @@ closer to how it runs when deployed.
 | `F` | Flashlight (drains the battery) |
 | `I` / `Tab` | Inventory |
 | `J` | The James file |
+| `M` / note icon (top of screen) | Mute / unmute |
 | `E` | Leave a hiding place |
 | `Esc` | Pause and save |
 

@@ -235,6 +235,19 @@
 
   #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
     background:#000;color:#a89372;font-size:13px;letter-spacing:6px;z-index:50;}
+
+  /* ---------- mute toggle — sits above every panel, on every screen ---------- */
+  #muteBtn{position:fixed;top:12px;left:50%;transform:translateX(-50%);
+    width:30px;height:30px;border-radius:50%;overflow:hidden;
+    background:rgba(10,9,7,.55);border:1px solid #594d33;color:#c9a961;
+    font-size:14px;line-height:1;cursor:pointer;z-index:50;
+    display:flex;align-items:center;justify-content:center;
+    transition:.15s;pointer-events:auto;}
+  #muteBtn:hover{border-color:var(--amber);color:#fffaf0;background:rgba(20,17,10,.75);}
+  #muteBtn.muted{color:#8a5a52;border-color:#5a3a34;}
+  /* a slash across the note when muted, rather than swapping glyphs */
+  #muteBtn.muted::after{content:'';position:absolute;left:4px;right:4px;top:50%;height:2px;
+    background:#e2554a;transform:rotate(-40deg);box-shadow:0 0 4px rgba(226,85,74,.7);}
 </style>
 </head>
 <body>
@@ -257,7 +270,7 @@
   </div>
   <div class="corner" id="botright">
     <div style="font-size:11px;color:#9a8a68;line-height:1.8;text-align:right;font-weight:700;">
-      CLICK FLOOR — WALK<br>CLICK OBJECT — USE<br>MOVE MOUSE TO EDGE — LOOK<br>F — LIGHT &nbsp; I — INVENTORY<br>ESC — PAUSE
+      CLICK FLOOR — WALK<br>CLICK OBJECT — USE<br>MOVE MOUSE TO EDGE — LOOK<br>F — LIGHT &nbsp; I — INVENTORY<br>M — MUTE &nbsp; ESC — PAUSE
     </div>
   </div>
 </div>
@@ -272,6 +285,10 @@
 <div id="hovername"></div>
 <div id="caption"></div>
 <div id="toast"></div>
+
+<!-- Always reachable, on every screen — title, paused, mid-scare, game over.
+     A mute toggle is a preference, not a game action, so it never hides. -->
+<button id="muteBtn" title="Mute (M)" aria-label="Mute"><span id="muteIcon">♪</span></button>
 
 <!-- ================= TITLE ================= -->
 <div class="layer on panel" id="title">
@@ -297,6 +314,7 @@
     <div id="stats"></div>
     <div class="track"></div>
     <button class="mi" id="btnResume">▶ &nbsp;RESUME</button>
+    <button class="mi" id="btnMute">▶ &nbsp;MUTE: OFF</button>
     <button class="mi" id="btnSave">▶ &nbsp;SAVE SHIFT LOG</button>
     <button class="mi" id="btnLoad2">▶ &nbsp;LOAD SHIFT LOG</button>
     <button class="mi" id="btnQuit">▶ &nbsp;ABANDON POST (QUIT)</button>
@@ -455,12 +473,14 @@ const Audio = (function(){
     return b;
   }
 
+  const BASE_VOL=0.85;
+  let muted=false;
   function init(){
     if(ready) return;
     const AC = window.AudioContext||window.webkitAudioContext;
     if(!AC) return;
     ctx = new AC();
-    master = ctx.createGain(); master.gain.value=0.85;
+    master = ctx.createGain(); master.gain.value=muted?0:BASE_VOL;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value=-14; comp.ratio.value=7; comp.attack.value=0.004; comp.release.value=0.25;
     master.connect(comp); comp.connect(ctx.destination);
@@ -476,6 +496,18 @@ const Audio = (function(){
     ready=true;
   }
   function resume(){ if(ctx && ctx.state==='suspended') ctx.resume(); }
+  /* One switch for the whole game — every bus routes through master, so a
+     short ramp there is enough to mute or restore everything at once without
+     a click. Works even before the AudioContext exists: the next init() will
+     just start silent. */
+  function setMuted(v){
+    muted=!!v;
+    if(master){
+      const t=ctx.currentTime;
+      master.gain.cancelScheduledValues(t);
+      master.gain.setTargetAtTime(muted?0:BASE_VOL, t, 0.05);
+    }
+  }
 
   function noise(dur, gainVal, type, freq, q){
     const s = ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
@@ -779,7 +811,7 @@ const Audio = (function(){
   return { init, resume, listener, footstep, bounce, bounceRun, lockerSlam, pickup, ui,
            staticBurst, paAnnounce, whisper, breath, water, buzz, elevator, crowd,
            heartbeat, jumpscare, buzzer, doorOpen, fail, setAmbient, stopAmbient, duck,
-           get ready(){return ready;} };
+           setMuted, get muted(){return muted;}, get ready(){return ready;} };
 })();
 
 /* ==========================================================================
@@ -2414,8 +2446,14 @@ const state = {
   deaths:0, dread:0, started:false, paused:false, hiding:false,
   ending:null, startTime:Date.now(), elapsed:0, seenIntro:false,
   ritual:0, finale:0, gameOver:false,
-  fragments:[], photos:[], jamesOpened:false
+  fragments:[], photos:[], jamesOpened:false,
+  // a preference, not save data — lives in its own localStorage key so it
+  // persists across new games and sessions rather than being tied to a shift
+  muted:(function(){ try{ return localStorage.getItem('atb_muted')==='1'; }catch(e){ return false; } })()
 };
+// Audio.init() only actually runs once, on whichever button fires first —
+// tell it the saved preference now so it starts silent if it needs to.
+Audio.setMuted(state.muted);
 
 /* Taken the moment a level is entered and restored on a restart, so a death
    costs the whole section rather than dropping the player at a checkpoint. */
@@ -2650,6 +2688,8 @@ function movePlayer(dx,dz){
 const keys={};
 window.addEventListener('keydown',e=>{
   keys[e.code]=true;
+  // mute works everywhere — title screen, mid-scare, paused — nothing else does
+  if(e.code==='KeyM'){ toggleMuted(); return; }
   if(!state.started || state.frozen) return;
   if(e.code==='Escape'){ UI.togglePause(); }
   if(e.code==='KeyI' || e.code==='Tab'){ e.preventDefault(); UI.toggleInv(); }
@@ -2664,6 +2704,19 @@ function toggleFlash(){
   state.flashOn=!state.flashOn;
   Audio.ui(state.flashOn?'ok':'bad');
   UI.toast(state.flashOn?'LIGHT ON':'LIGHT OFF');
+}
+
+function setMuted(v){
+  state.muted=!!v;
+  Audio.setMuted(state.muted);
+  try{ localStorage.setItem('atb_muted', state.muted?'1':'0'); }catch(e){}
+  UI.updateMuteUI();
+}
+function toggleMuted(){
+  setMuted(!state.muted);
+  // the click that just unmuted should itself be audible
+  if(!state.muted) Audio.ui('ok');
+  UI.toast(state.muted?'AUDIO MUTED':'AUDIO UNMUTED');
 }
 
 /* --- mouse / pointer --- */
@@ -3581,6 +3634,12 @@ const UI = (function(){
   }
   function caption(t){ const c=$('caption'); c.textContent=t; c.classList.add('on'); capT=5.5; }
   function toast(t){ const c=$('toast'); c.textContent=t; c.classList.add('on'); toastT=2.2; }
+  function updateMuteUI(){
+    const btn=$('muteBtn'), pauseBtn=$('btnMute');
+    // the note icon stays put; a small CSS ✕ overlay (see .muted #muteIcon::after) is the only change
+    btn.classList.toggle('muted', state.muted);
+    if(pauseBtn) pauseBtn.textContent = '▶ \u00a0MUTE: '+(state.muted?'ON':'OFF');
+  }
   function flash(v){ flashV=Math.max(flashV,v); }
   function shake(v){ shakeT=Math.max(shakeT,v); shakeP=Math.max(shakeP,v); }
   function stretch(v){ stretchT=Math.max(stretchT,v); }
@@ -3787,6 +3846,7 @@ const UI = (function(){
   return {updateHUD, readBatMeter, levelBanner, caption, toast, flash, shake, stretch, dreadFlash, fade,
           cursorAt, pingAt, showNote, showPhoto, hideNote, prompt, buildInv, toggleInv,
           toggleDossier, togglePause, showEnding, showGameOver, hideGameOver, hover, tick,
+          updateMuteUI,
           get shakeAmt(){return shakeT>0?shakeT:0;},
           get stretchAmt(){return stretchT>0?stretchT:0;}};
 })();
@@ -4094,7 +4154,7 @@ $('btnLoad').onclick=()=>{ Audio.init(); if(!loadGame()){ UI.toast('NO SHIFT LOG
 $('btnHow').onclick=()=>{
   Audio.init();
   UI.showNote('EMPLOYEE HANDBOOK — NIGHT CUSTODIAL',
-    'MOVEMENT\n  Click the floor to walk there. You cannot run.\n  Move the mouse toward the edge of the screen to\n  look around. The middle of the screen is still.\n  WASD also walks, if you prefer.\n\nINTERACTION\n  Click a basketball, note, key or door to use it.\n  If it is far away you will walk to it first.\n\nFLASHLIGHT\n  F toggles the light. It drains the battery.\n  Spare D-cells are scattered through the building.\n\nHIDING\n  When something is walking toward you, click a locker,\n  stall or alcove to hide. Press E to come out.\n  Do not come out while it is still close.\n\nINVENTORY\n  I or TAB. ESC pauses and saves.\n\nRULES\n  Collect every basketball in a section before you leave it.\n  The count must match. Do not count out loud.', true);
+    'MOVEMENT\n  Click the floor to walk there. You cannot run.\n  Move the mouse toward the edge of the screen to\n  look around. The middle of the screen is still.\n  WASD also walks, if you prefer.\n\nINTERACTION\n  Click a basketball, note, key or door to use it.\n  If it is far away you will walk to it first.\n\nFLASHLIGHT\n  F toggles the light. It drains the battery.\n  Spare D-cells are scattered through the building.\n\nAUDIO\n  M mutes and unmutes everything. There is also a\n  small note icon at the top of the screen at all\n  times, on the title screen and mid-shift alike.\n\nHIDING\n  When something is walking toward you, click a locker,\n  stall or alcove to hide. Press E to come out.\n  Do not come out while it is still close.\n\nINVENTORY\n  I or TAB. ESC pauses and saves.\n\nRULES\n  Collect every basketball in a section before you leave it.\n  The count must match. Do not count out loud.', true);
   state.paused=false;
 };
 $('noteClose').onclick=()=>{ UI.hideNote(); Audio.ui(); };
@@ -4102,6 +4162,9 @@ $('btnInvClose').onclick=()=>UI.toggleInv();
 $('btnDossier').onclick=()=>{ UI.toggleInv(); UI.toggleDossier(); };
 $('btnDosClose').onclick=()=>UI.toggleDossier();
 $('btnResume').onclick=()=>UI.togglePause();
+$('btnMute').onclick=()=>toggleMuted();
+$('muteBtn').onclick=()=>{ Audio.init(); Audio.resume(); toggleMuted(); };
+UI.updateMuteUI();
 $('btnSave').onclick=()=>saveGame();
 $('btnLoad2').onclick=()=>{ UI.togglePause(); if(!loadGame()) UI.toast('NO SHIFT LOG FOUND'); };
 $('btnQuit').onclick=()=>{
@@ -4158,7 +4221,8 @@ if(window.__ATB_DEBUG){
     openJamesLocker:openJamesLocker,
     resolveEnding:resolveEnding, totalCollected:totalCollected, enterHide:enterHide,
     exitHide:exitHide, addItem:addItem, hasItem:hasItem, TOTAL_BALLS:TOTAL_BALLS,
-    collides:collides, freeSpotNear:freeSpotNear, CFG:CFG};
+    collides:collides, freeSpotNear:freeSpotNear, CFG:CFG,
+    setMuted:setMuted, toggleMuted:toggleMuted};
 }
 
 })();
