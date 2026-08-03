@@ -236,8 +236,10 @@
   #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
     background:#000;color:#a89372;font-size:13px;letter-spacing:6px;z-index:50;}
 
-  /* ---------- mute toggle — sits above every panel, on every screen ---------- */
-  #muteBtn{position:fixed;top:12px;left:50%;transform:translateX(-50%);
+  /* ---------- mute toggle — sits above every panel, on every screen ----------
+     Bottom-right, stacked just above the control-hints corner text so it
+     reads as part of that cluster without overlapping it. */
+  #muteBtn{position:fixed;bottom:130px;right:22px;
     width:30px;height:30px;border-radius:50%;overflow:hidden;
     background:rgba(10,9,7,.55);border:1px solid #594d33;color:#c9a961;
     font-size:14px;line-height:1;cursor:pointer;z-index:50;
@@ -245,9 +247,9 @@
     transition:.15s;pointer-events:auto;}
   #muteBtn:hover{border-color:var(--amber);color:#fffaf0;background:rgba(20,17,10,.75);}
   #muteBtn.muted{color:#8a5a52;border-color:#5a3a34;}
-  /* a slash across the note when muted, rather than swapping glyphs */
-  #muteBtn.muted::after{content:'';position:absolute;left:4px;right:4px;top:50%;height:2px;
-    background:#e2554a;transform:rotate(-40deg);box-shadow:0 0 4px rgba(226,85,74,.7);}
+  #muteBtn svg{display:block;flex-shrink:0;}
+  #muteBtn.muted svg.icon-on{display:none;}
+  #muteBtn:not(.muted) svg.icon-off{display:none;}
 </style>
 </head>
 <body>
@@ -288,7 +290,18 @@
 
 <!-- Always reachable, on every screen — title, paused, mid-scare, game over.
      A mute toggle is a preference, not a game action, so it never hides. -->
-<button id="muteBtn" title="Mute (M)" aria-label="Mute"><span id="muteIcon">♪</span></button>
+<button id="muteBtn" title="M - Mute" aria-label="M - Mute">
+  <svg class="icon-on" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+    <path d="M3 9.5h3.5L9 6.5v11L6.5 14.5H3z" fill="currentColor"/>
+    <path d="M11 9.2Q14 12 11 14.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M12.8 7.4Q17 12 12.8 16.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M14.5 5.8Q21 12 14.5 18.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  <svg class="icon-off" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+    <path d="M3 9.5h3.5L9 6.5v11L6.5 14.5H3z" fill="currentColor"/>
+    <line x1="2" y1="5" x2="22" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>
+</button>
 
 <!-- ================= TITLE ================= -->
 <div class="layer on panel" id="title">
@@ -314,7 +327,7 @@
     <div id="stats"></div>
     <div class="track"></div>
     <button class="mi" id="btnResume">▶ &nbsp;RESUME</button>
-    <button class="mi" id="btnMute">▶ &nbsp;MUTE: OFF</button>
+    <button class="mi" id="btnMute">▶ &nbsp;M - MUTE</button>
     <button class="mi" id="btnSave">▶ &nbsp;SAVE SHIFT LOG</button>
     <button class="mi" id="btnLoad2">▶ &nbsp;LOAD SHIFT LOG</button>
     <button class="mi" id="btnQuit">▶ &nbsp;ABANDON POST (QUIT)</button>
@@ -3636,9 +3649,12 @@ const UI = (function(){
   function toast(t){ const c=$('toast'); c.textContent=t; c.classList.add('on'); toastT=2.2; }
   function updateMuteUI(){
     const btn=$('muteBtn'), pauseBtn=$('btnMute');
-    // the note icon stays put; a small CSS ✕ overlay (see .muted #muteIcon::after) is the only change
+    // CSS toggles icon-on / icon-off SVGs via .muted on #muteBtn
     btn.classList.toggle('muted', state.muted);
-    if(pauseBtn) pauseBtn.textContent = '▶ \u00a0MUTE: '+(state.muted?'ON':'OFF');
+    // label describes the action the key performs, not the current state
+    const label = state.muted ? 'M - Unmute' : 'M - Mute';
+    btn.title = label; btn.setAttribute('aria-label', label);
+    if(pauseBtn) pauseBtn.textContent = '▶ \u00a0'+label.toUpperCase();
   }
   function flash(v){ flashV=Math.max(flashV,v); }
   function shake(v){ shakeT=Math.max(shakeT,v); shakeP=Math.max(shakeP,v); }
